@@ -1,0 +1,193 @@
+#errorCatcher Echo
+#import json
+
+#set $station_code = str($Extras.get('station_code', '') or '').strip() or str($station.location).strip()
+#set $brand_prefix = str($Extras['brand_prefix'] if 'brand_prefix' in $Extras else '').strip()
+#set $brand_primary = str($Extras.get('brand_primary', 'FROST') or 'FROST').strip()
+#set $brand_secondary = str($Extras.get('brand_secondary', 'LINE') or 'LINE').strip()
+#set $brand_full = ($brand_prefix + ' ' if $brand_prefix else '') + $brand_primary + $brand_secondary
+#set $primary_title = str($Extras.get('primary_sensor_title', '5-in-1 Weather Station')).strip()
+#set $secondary_title = str($Extras.get('secondary_sensor_title', 'Lightning Tower')).strip()
+#set $default_chartjs_cdn = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js'
+#set $default_chartjs_sri = 'sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC'
+#set $chartjs_cdn = str($Extras.get('chartjs_cdn', $default_chartjs_cdn) or $default_chartjs_cdn).strip()
+#set $chartjs_sri = str($Extras.get('chartjs_sri', $default_chartjs_sri if $chartjs_cdn == $default_chartjs_cdn else '') or '').strip()
+#set $asset_ver = str($Extras.get('asset_version', '20261123-9') or '20261123-9').strip()
+
+#set $runtime_config = {"page": "charts", "stationCode": $station_code, "location": str($station.location).strip(), "primarySensorTitle": $primary_title, "secondarySensorTitle": $secondary_title, "dateLabel": str($current.dateTime.format("%m/%d/%Y")).strip() if $current.dateTime.has_data else ""}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      var p = new URLSearchParams(window.location.search).get("theme");
+      var s = (p === "light" || p === "dark") ? p : localStorage.getItem("color-scheme");
+      if (s === "light" || s === "dark") {
+        document.documentElement.setAttribute("data-theme", s);
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (e) {}
+  </script>
+  <title>Charts &mdash; $station_code | $brand_full</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icons/frostline-logo.svg?v=$asset_ver">
+  <link rel="stylesheet" href="assets/css/style.css?v=$asset_ver">
+</head>
+<body class="page-charts">
+  <a href="#main-content" class="skip-link visually-hidden">Skip to weather charts</a>
+
+  <header class="app-header">
+    <div class="top-brand-bar">
+      <div class="brand-bar-inner">
+        <div class="brand-left">
+          <a href="index.html" class="brand-logo" aria-label="$brand_full Weather Dashboard">
+            <svg class="brand-mark" viewBox="0 0 32 32" width="24" height="24" fill="none" aria-hidden="true">
+              <g stroke="var(--accent-cyan, #00A8E8)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(60 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(120 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <polygon points="16 13.4 18.25 14.7 18.25 17.3 16 18.6 13.75 17.3 13.75 14.7" fill="var(--accent-cyan, #00A8E8)" fill-opacity="0.22"/>
+              </g>
+              <circle cx="16" cy="16" r="1.2" fill="var(--accent-cyan, #00A8E8)"/>
+            </svg>
+            <span class="brand-wordmark">
+              #if $brand_prefix
+              <span class="brand-prefix">$brand_prefix</span>#slurp
+              #end if
+              <span class="brand-primary">$brand_primary</span><span class="brand-secondary">$brand_secondary</span>
+            </span>
+          </a>
+        </div>
+        <div class="brand-center">
+          <h1 class="station-heading">$station.location &mdash; Charts</h1>
+        </div>
+        <div class="brand-right">
+          <span class="last-updated-badge">Updated $current.dateTime</span>
+          <button type="button" class="icon-action-btn" id="header-action-btn" data-action="download" aria-label="Download active period archive JSON">
+            <svg viewBox="0 0 28 24" width="24" height="22" aria-hidden="true">
+              <path fill="currentColor" d="M21.5 9.8A6.5 6.5 0 0 0 9.1 7.6 5.2 5.2 0 0 0 7.5 18h13.8a4.2 4.2 0 0 0 .2-8.2Zm-7.5 6.4-3.8-3.8h2.4V9h2.8v3.4h2.4L14 16.2Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="station-nav-bar" aria-label="Dashboard navigation">
+      <div class="station-nav-inner">
+        <ul class="nav-tabs">
+          <li>
+            <a href="index.html" class="nav-tab">
+              <span class="station-code-pill">$station_code</span>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="charts.html" class="nav-tab is-active" aria-current="page">
+              <span>Charts</span>
+            </a>
+          </li>
+          <li>
+            <a href="records.html" class="nav-tab">
+              <span>Records</span>
+            </a>
+          </li>
+          <li>
+            <a href="wear.html" class="nav-tab">
+              <span>What to Wear</span>
+            </a>
+          </li>
+          <li>
+            <a href="station.html" class="nav-tab">
+              <span>Station</span>
+            </a>
+          </li>
+        </ul>
+        <div class="nav-theme-control">
+          <label for="theme-select" class="visually-hidden">Color theme</label>
+          <select id="theme-select" class="theme-select">
+            <option value="auto">Auto</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content" class="charts-main">
+    <section class="charts-controls" aria-label="Chart filters">
+      <div class="sensor-select-row">
+        <label for="sensor-select" class="visually-hidden">Sensor source</label>
+        <select id="sensor-select" class="sensor-select">
+          <option value="primary" selected>$primary_title</option>
+          <option value="tower">$secondary_title</option>
+        </select>
+      </div>
+
+      <div class="filter-select-row">
+        <div class="filter-control">
+          <label for="metric-select" class="visually-hidden">Weather metric</label>
+          <select id="metric-select" class="cyan-select">
+            <option value="temperature" selected>Temperature</option>
+            <option value="rain">Rain</option>
+            <option value="humidity">Humidity</option>
+            <option value="wind">Wind</option>
+            <option value="barometer">Barometer</option>
+            <option value="dewpoint">Dew Point</option>
+            <option value="lightning">Lightning</option>
+          </select>
+        </div>
+
+        <div class="filter-control">
+          <label for="period-select" class="visually-hidden">Timeframe</label>
+          <select id="period-select" class="cyan-select">
+            <option value="today" selected>Today</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="stat-tiles-grid" class="stat-tiles-grid" role="group" aria-label="Summary statistics and chart series selector">
+        <div class="stat-tile-skeleton">Loading summary metrics&hellip;</div>
+      </div>
+    </section>
+
+    <section class="chart-stage" aria-label="Time-series graph">
+      <div class="chart-stage-header">
+        <span id="chart-active-label" class="chart-active-label">Temperature</span>
+        <span id="chart-date-label" class="chart-date-label">#if $current.dateTime.has_data#$current.dateTime.format("%m/%d/%Y")#end if#</span>
+      </div>
+
+      <div class="chart-canvas-wrap">
+        <canvas id="weather-chart" role="img" aria-label="Time-series weather chart"></canvas>
+        <div id="chart-empty-state" class="chart-empty-state" hidden>
+          No archived data available for this timeframe yet.
+        </div>
+      </div>
+
+      <p id="chart-aria-summary" class="visually-hidden" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>$station.location &middot; $station.hardware &middot; WeeWX $station.version</span>
+  </footer>
+
+  <div id="status-toast" class="status-toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    window.FROSTLINE_CONFIG = #echo json.dumps($runtime_config).replace('</', '<\\/')#;
+  </script>
+  #if $chartjs_sri
+  <script src="$chartjs_cdn" integrity="$chartjs_sri" crossorigin="anonymous" defer></script>
+  #else
+  <script src="$chartjs_cdn" defer></script>
+  #end if
+  <script src="assets/js/chart-fallback.js?v=$asset_ver" defer></script>
+  <script src="assets/js/app.js?v=$asset_ver" defer></script>
+</body>
+</html>

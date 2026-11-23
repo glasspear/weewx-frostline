@@ -1,0 +1,284 @@
+#errorCatcher Echo
+#import json
+#import math
+
+#set $PERIOD_ID = "year"
+#set $PERIOD_LABEL = "Year"
+#set $SPAN = $year
+#set $AGG_INTERVAL = 86400
+#set $RAIN_INTERVAL = 86400
+#set $TIME_FMT = "%b %d, %Y"
+
+#def _clean_num($val)
+#try
+#if $val is None
+#return None
+#end if
+#set $f = float($val)
+#if math.isfinite($f)
+#return round($f, 4)
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#def _fmt_time($t_vh, $fmt)
+#try
+#if $t_vh is not None and $t_vh.raw is not None
+#set $s = str($t_vh.format($fmt)).strip()
+#set $s = $s.replace(" AM", " a.m.").replace(" PM", " p.m.").replace(" am", " a.m.").replace(" pm", " p.m.")
+#return $s
+#end if
+#except
+#pass
+#end try
+#return ""
+#end def
+
+#def _unit_label($u_vh)
+#try
+#return str($u_vh).strip()
+#except
+#return ""
+#end try
+#end def
+
+#def _unit_type($u_vh)
+#try
+#return str($u_vh).strip()
+#except
+#return ""
+#end try
+#end def
+
+#def _stat_entry($key, $series_key, $title, $subtitle, $val_vh, $time_vh, $unit_str, $time_fmt, $scale=1.0, $fmt=None)
+#set $v = None
+#set $f_str = "--"
+#set $t_str = ""
+#try
+#if $val_vh is not None and $val_vh.has_data and $val_vh.raw is not None
+#set $v = $_clean_num(float($val_vh.raw) * $scale)
+#if $fmt is not None and $v is not None
+#set $f_str = ($fmt % $v)
+#else
+#set $f_str = str($val_vh.format(add_label=False)).strip()
+#end if
+#end if
+#except
+#pass
+#end try
+#if $time_vh is not None and $v is not None
+#set $t_str = $_fmt_time($time_vh, $time_fmt)
+#end if
+#return {"key": $key, "seriesKey": $series_key, "title": $title, "subtitle": $subtitle, "value": $v, "formatted": $f_str, "unit": $unit_str, "time": $t_str}
+#end def
+
+#def _build_series($obs_binder, $agg_type, $interval, $chart_type, $label, $unit_str, $scale=1.0)
+#set $ts_out = []
+#set $vals_out = []
+#try
+#set $sh = $obs_binder.series(time_series='start', aggregate_type=$agg_type, aggregate_interval=$interval)
+#set $starts = $sh.start.raw
+#set $datas = $sh.data.raw
+#if $starts is not None and $datas is not None
+#for $ts_val, $d_val in zip($starts, $datas)
+#if $ts_val is not None
+#silent $ts_out.append(int($ts_val))
+#if $d_val is not None
+#silent $vals_out.append($_clean_num(float($d_val) * $scale))
+#else
+#silent $vals_out.append(None)
+#end if
+#end if
+#end for
+#end if
+#except
+#pass
+#end try
+#return {"timestamps": $ts_out, "values": $vals_out, "chartType": $chart_type, "label": $label, "unit": $unit_str}
+#end def
+
+#def _build_rain_series($obs_binder, $interval, $scale=1.0, $unit_str="mm")
+#set $base = $_build_series($obs_binder, "sum", $interval, "rain-combo", "Rain", $unit_str, $scale)
+#set $cum_out = []
+#set $running = 0.0
+#for $v in $base["values"]
+#if $v is not None and $v > 0
+#set $running = $running + float($v)
+#end if
+#silent $cum_out.append(round($running, 2))
+#end for
+#silent $base.update({"cumulativeValues": $cum_out, "cumulativeLabel": "Rain Accumulation", "intervalLabel": "Interval Rain"})
+#return $base
+#end def
+
+#def _has_real_points($series_obj)
+#for $v in $series_obj["values"]
+#if $v is not None
+#return True
+#end if
+#end for
+#return False
+#end def
+
+#set $rain_units_pref = str($Extras.get('rain_units', 'auto') or 'auto').strip().lower()
+#set $raw_rain_ut = $_unit_type($unit.unit_type.rain).lower()
+#set $raw_rr_ut = $_unit_type($unit.unit_type.rainRate).lower()
+#set $use_inch_rain = ($rain_units_pref == 'inch') or ($rain_units_pref == 'auto' and 'inch' in $raw_rain_ut)
+#if $use_inch_rain
+#set $rain_scale = 1.0 if 'inch' in $raw_rain_ut else (0.39370079 if 'cm' in $raw_rain_ut else 0.03937008)
+#set $rainrate_scale = 1.0 if 'inch' in $raw_rr_ut else (0.39370079 if 'cm' in $raw_rr_ut else 0.03937008)
+#set $u_rain = "in"
+#set $u_rain_type = "inch"
+#set $u_rainrate = "in/h"
+#set $u_rr_type = "inch_per_hour"
+#else
+#set $rain_scale = 10.0 if 'cm' in $raw_rain_ut else (25.4 if 'inch' in $raw_rain_ut else 1.0)
+#set $rainrate_scale = 10.0 if 'cm' in $raw_rr_ut else (25.4 if 'inch' in $raw_rr_ut else 1.0)
+#set $u_rain = "mm"
+#set $u_rain_type = "mm"
+#set $u_rainrate = "mm/h"
+#set $u_rr_type = "mm_per_hour"
+#end if
+
+#set $u_temp = $_unit_label($unit.label.outTemp)
+#set $u_dew = $_unit_label($unit.label.dewpoint)
+#set $u_hum = $_unit_label($unit.label.outHumidity)
+#set $u_wind = $_unit_label($unit.label.windSpeed)
+#set $u_baro = $_unit_label($unit.label.barometer)
+
+#set $sec_temp_unit = $_unit_label($unit.label.inTemp)
+#set $sec_hum_unit = $_unit_label($unit.label.inHumidity)
+#set $use_extra_temp = False
+#set $use_extra_hum = False
+#try
+#if $SPAN.extraTemp1.max.has_data
+#set $use_extra_temp = True
+#set $sec_temp_unit = $_unit_label($unit.label.extraTemp1)
+#end if
+#except
+#pass
+#end try
+#try
+#if $SPAN.extraHumid1.max.has_data
+#set $use_extra_hum = True
+#set $sec_hum_unit = $_unit_label($unit.label.extraHumid1)
+#end if
+#except
+#pass
+#end try
+
+#set $units_obj = {}
+#silent $units_obj.update({"temperature": {"label": $u_temp, "type": $_unit_type($unit.unit_type.outTemp)}})
+#silent $units_obj.update({"dewpoint": {"label": $u_dew, "type": $_unit_type($unit.unit_type.dewpoint)}})
+#silent $units_obj.update({"rain": {"label": $u_rain, "type": $u_rain_type}})
+#silent $units_obj.update({"rainRate": {"label": $u_rainrate, "type": $u_rr_type}})
+#silent $units_obj.update({"humidity": {"label": $u_hum, "type": $_unit_type($unit.unit_type.outHumidity)}})
+#silent $units_obj.update({"wind": {"label": $u_wind, "type": $_unit_type($unit.unit_type.windSpeed)}})
+#silent $units_obj.update({"barometer": {"label": $u_baro, "type": $_unit_type($unit.unit_type.barometer)}})
+
+#set $stats_obj = {}
+#silent $stats_obj.update({"temperature": [$_stat_entry("outTempHigh", "outTemp", "Temp", "High", $SPAN.outTemp.max, $SPAN.outTemp.maxtime, $u_temp, $TIME_FMT), $_stat_entry("outTempLow", "outTemp", "Temp", "Low", $SPAN.outTemp.min, $SPAN.outTemp.mintime, $u_temp, $TIME_FMT), $_stat_entry("dewpointHigh", "dewpoint", "Dew Point", "High", $SPAN.dewpoint.max, $SPAN.dewpoint.maxtime, $u_dew, $TIME_FMT), $_stat_entry("dewpointLow", "dewpoint", "Dew Point", "Low", $SPAN.dewpoint.min, $SPAN.dewpoint.mintime, $u_dew, $TIME_FMT)]})
+#silent $stats_obj.update({"rain": [$_stat_entry("rainTotal", "rain", "Rain", "Total", $SPAN.rain.sum, None, $u_rain, $TIME_FMT, $rain_scale, "%.2f"), $_stat_entry("rainRateHigh", "rainRate", "Rain Rate", "High", $SPAN.rainRate.max, $SPAN.rainRate.maxtime, $u_rainrate, $TIME_FMT, $rainrate_scale, "%.2f")]})
+#silent $stats_obj.update({"humidity": [$_stat_entry("outHumidityHigh", "outHumidity", "Humidity", "High", $SPAN.outHumidity.max, $SPAN.outHumidity.maxtime, $u_hum, $TIME_FMT), $_stat_entry("outHumidityLow", "outHumidity", "Humidity", "Low", $SPAN.outHumidity.min, $SPAN.outHumidity.mintime, $u_hum, $TIME_FMT)]})
+#silent $stats_obj.update({"wind": [$_stat_entry("windGustHigh", "windGust", "Wind Gust", "High", $SPAN.windGust.max, $SPAN.windGust.maxtime, $u_wind, $TIME_FMT), $_stat_entry("windSpeedAvg", "windSpeed", "Wind", "Average", $SPAN.windSpeed.avg, None, $u_wind, $TIME_FMT)]})
+#silent $stats_obj.update({"barometer": [$_stat_entry("barometerHigh", "barometer", "Barometer", "High", $SPAN.barometer.max, $SPAN.barometer.maxtime, $u_baro, $TIME_FMT), $_stat_entry("barometerLow", "barometer", "Barometer", "Low", $SPAN.barometer.min, $SPAN.barometer.mintime, $u_baro, $TIME_FMT)]})
+#silent $stats_obj.update({"dewpoint": [$_stat_entry("dewpointHigh", "dewpoint", "Dew Point", "High", $SPAN.dewpoint.max, $SPAN.dewpoint.maxtime, $u_dew, $TIME_FMT), $_stat_entry("dewpointLow", "dewpoint", "Dew Point", "Low", $SPAN.dewpoint.min, $SPAN.dewpoint.mintime, $u_dew, $TIME_FMT)]})
+
+#set $u_dist = $_unit_label($unit.label.lightning_distance) or "km"
+#set $lt_strikes_stat = {"key": "lightningStrikesTotal", "seriesKey": "lightningStrikes", "title": "Lightning", "subtitle": "Total", "value": 0, "formatted": "0", "unit": "strikes", "time": ""}
+#set $lt_dist_stat = {"key": "lightningDistanceMin", "seriesKey": "lightningDistance", "title": "Strike Distance", "subtitle": "Closest", "value": None, "formatted": "--", "unit": $u_dist, "time": ""}
+#try
+#if $SPAN.lightning_strike_count.sum.has_data
+#set $lt_strikes_stat = $_stat_entry("lightningStrikesTotal", "lightningStrikes", "Lightning", "Total", $SPAN.lightning_strike_count.sum, $SPAN.lightning_strike_count.lasttime, "strikes", $TIME_FMT, 1.0, "%.0f")
+#end if
+#except
+#pass
+#end try
+#try
+#if $SPAN.lightning_distance.min.has_data
+#set $lt_dist_stat = $_stat_entry("lightningDistanceMin", "lightningDistance", "Strike Distance", "Closest", $SPAN.lightning_distance.min, $SPAN.lightning_distance.mintime, $u_dist, $TIME_FMT)
+#end if
+#except
+#pass
+#end try
+#set $lightning_stats = [$lt_strikes_stat, $lt_dist_stat]
+#silent $stats_obj.update({"lightning": $lightning_stats})
+
+#if $use_extra_temp
+#set $tower_temp_stats = [$_stat_entry("towerTempHigh", "towerTemp", "Tower Temp", "High", $SPAN.extraTemp1.max, $SPAN.extraTemp1.maxtime, $sec_temp_unit, $TIME_FMT), $_stat_entry("towerTempLow", "towerTemp", "Tower Temp", "Low", $SPAN.extraTemp1.min, $SPAN.extraTemp1.mintime, $sec_temp_unit, $TIME_FMT), $_stat_entry("dewpointHigh", "dewpoint", "Dew Point", "High", $SPAN.dewpoint.max, $SPAN.dewpoint.maxtime, $u_dew, $TIME_FMT), $_stat_entry("dewpointLow", "dewpoint", "Dew Point", "Low", $SPAN.dewpoint.min, $SPAN.dewpoint.mintime, $u_dew, $TIME_FMT)]
+#else
+#set $tower_temp_stats = [$_stat_entry("towerTempHigh", "towerTemp", "Tower Temp", "High", $SPAN.inTemp.max, $SPAN.inTemp.maxtime, $sec_temp_unit, $TIME_FMT), $_stat_entry("towerTempLow", "towerTemp", "Tower Temp", "Low", $SPAN.inTemp.min, $SPAN.inTemp.mintime, $sec_temp_unit, $TIME_FMT), $_stat_entry("dewpointHigh", "dewpoint", "Dew Point", "High", $SPAN.dewpoint.max, $SPAN.dewpoint.maxtime, $u_dew, $TIME_FMT), $_stat_entry("dewpointLow", "dewpoint", "Dew Point", "Low", $SPAN.dewpoint.min, $SPAN.dewpoint.mintime, $u_dew, $TIME_FMT)]
+#end if
+#if $use_extra_hum
+#set $tower_hum_stats = [$_stat_entry("towerHumidityHigh", "towerHumidity", "Humidity", "High", $SPAN.extraHumid1.max, $SPAN.extraHumid1.maxtime, $sec_hum_unit, $TIME_FMT), $_stat_entry("towerHumidityLow", "towerHumidity", "Humidity", "Low", $SPAN.extraHumid1.min, $SPAN.extraHumid1.mintime, $sec_hum_unit, $TIME_FMT)]
+#else
+#set $tower_hum_stats = [$_stat_entry("towerHumidityHigh", "towerHumidity", "Humidity", "High", $SPAN.inHumidity.max, $SPAN.inHumidity.maxtime, $sec_hum_unit, $TIME_FMT), $_stat_entry("towerHumidityLow", "towerHumidity", "Humidity", "Low", $SPAN.inHumidity.min, $SPAN.inHumidity.mintime, $sec_hum_unit, $TIME_FMT)]
+#end if
+#silent $stats_obj.update({"tower": {"temperature": $tower_temp_stats, "humidity": $tower_hum_stats, "dewpoint": $stats_obj["dewpoint"], "lightning": $lightning_stats}})
+
+#set $series_obj = {}
+#silent $series_obj.update({"outTemp": $_build_series($SPAN.outTemp, "avg", $AGG_INTERVAL, "line", "Temperature", $u_temp)})
+#silent $series_obj.update({"dewpoint": $_build_series($SPAN.dewpoint, "avg", $AGG_INTERVAL, "line", "Dew Point", $u_dew)})
+#silent $series_obj.update({"rain": $_build_rain_series($SPAN.rain, $RAIN_INTERVAL, $rain_scale, $u_rain)})
+#silent $series_obj.update({"rainRate": $_build_series($SPAN.rainRate, "max", $AGG_INTERVAL, "line", "Rain Rate", $u_rainrate, $rainrate_scale)})
+#silent $series_obj.update({"outHumidity": $_build_series($SPAN.outHumidity, "avg", $AGG_INTERVAL, "line", "Humidity", $u_hum)})
+#silent $series_obj.update({"windSpeed": $_build_series($SPAN.windSpeed, "avg", $AGG_INTERVAL, "line", "Wind Speed", $u_wind)})
+#silent $series_obj.update({"windGust": $_build_series($SPAN.windGust, "max", $AGG_INTERVAL, "line", "Wind Gust", $u_wind)})
+#silent $series_obj.update({"barometer": $_build_series($SPAN.barometer, "avg", $AGG_INTERVAL, "line", "Barometer", $u_baro)})
+
+#set $lt_strikes_series = {"timestamps": [], "values": [], "chartType": "bar", "label": "Lightning Strikes", "unit": "strikes"}
+#try
+#set $lt_strikes_series = $_build_series($SPAN.lightning_strike_count, "sum", $RAIN_INTERVAL, "bar", "Lightning Strikes", "strikes")
+#except
+#pass
+#end try
+#silent $series_obj.update({"lightningStrikes": $lt_strikes_series})
+
+#set $lt_dist_series = {"timestamps": [], "values": [], "chartType": "line", "label": "Closest Strike Distance", "unit": $u_dist}
+#try
+#set $lt_dist_series = $_build_series($SPAN.lightning_distance, "min", $AGG_INTERVAL, "line", "Closest Strike Distance", $u_dist)
+#except
+#pass
+#end try
+#silent $series_obj.update({"lightningDistance": $lt_dist_series})
+
+#set $tower_temp_series = None
+#if $use_extra_temp
+#try
+#set $tower_temp_series = $_build_series($SPAN.extraTemp1, "avg", $AGG_INTERVAL, "line", "Tower Temperature", $sec_temp_unit)
+#except
+#set $tower_temp_series = None
+#end try
+#end if
+#if $tower_temp_series is None or not $_has_real_points($tower_temp_series)
+#set $tower_temp_series = $_build_series($SPAN.inTemp, "avg", $AGG_INTERVAL, "line", "Tower Temperature", $sec_temp_unit)
+#end if
+#silent $series_obj.update({"towerTemp": $tower_temp_series})
+
+#set $tower_hum_series = None
+#if $use_extra_hum
+#try
+#set $tower_hum_series = $_build_series($SPAN.extraHumid1, "avg", $AGG_INTERVAL, "line", "Tower Humidity", $sec_hum_unit)
+#except
+#set $tower_hum_series = None
+#end try
+#end if
+#if $tower_hum_series is None or not $_has_real_points($tower_hum_series)
+#set $tower_hum_series = $_build_series($SPAN.inHumidity, "avg", $AGG_INTERVAL, "line", "Tower Humidity", $sec_hum_unit)
+#end if
+#silent $series_obj.update({"towerHumidity": $tower_hum_series})
+
+#set $date_label = ""
+#try
+#if $current.dateTime.has_data
+#set $date_label = str($current.dateTime.format("%m/%d/%Y")).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $payload = {"period": $PERIOD_ID, "periodLabel": $PERIOD_LABEL, "generated": int($current.dateTime.raw) if $current.dateTime.has_data else None, "dateLabel": $date_label, "units": $units_obj, "stats": $stats_obj, "series": $series_obj}
+#echo json.dumps($payload)

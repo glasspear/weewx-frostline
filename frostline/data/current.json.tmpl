@@ -1,0 +1,246 @@
+#errorCatcher Echo
+#import json
+#import math
+
+#def _obs_num($vh, $scale=1.0)
+#try
+#if $vh.has_data
+#set $f = float($vh.raw) * $scale
+#if math.isfinite($f)
+#return round($f, 4)
+#end if
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#def _obs_str($vh)
+#try
+#if $vh.has_data
+#return str($vh.format(add_label=False)).strip()
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#def _obs_rain_str($vh, $scale, $fmt="%.1f")
+#try
+#if $vh.has_data
+#set $f = float($vh.raw) * $scale
+#if math.isfinite($f)
+#return ($fmt % $f)
+#end if
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#def _unit_label($unit_vh)
+#try
+#return str($unit_vh).strip()
+#except
+#return ""
+#end try
+#end def
+
+#def _unit_type($unit_vh)
+#try
+#return str($unit_vh).strip()
+#except
+#return ""
+#end try
+#end def
+
+#set $lat_val = 0.0
+#set $lon_val = 0.0
+#try
+#set $lat_val = float($station.stn_info.latitude_f)
+#except
+#try
+#set $lat_val = float($station.latitude.raw)
+#except
+#set $lat_val = 0.0
+#end try
+#end try
+#try
+#set $lon_val = float($station.stn_info.longitude_f)
+#except
+#try
+#set $lon_val = float($station.longitude.raw)
+#except
+#set $lon_val = 0.0
+#end try
+#end try
+
+#set $station_code = $Extras.get('station_code', '').strip() or str($station.location).strip()
+
+#set $sec_temp_obs = $current.inTemp
+#set $sec_temp_unit_label = $_unit_label($unit.label.inTemp)
+#set $sec_temp_unit_type = $_unit_type($unit.unit_type.inTemp)
+#try
+#if $current.extraTemp1.has_data
+#set $sec_temp_obs = $current.extraTemp1
+#set $sec_temp_unit_label = $_unit_label($unit.label.extraTemp1)
+#set $sec_temp_unit_type = $_unit_type($unit.unit_type.extraTemp1)
+#end if
+#except
+#pass
+#end try
+
+#set $sec_hum_obs = $current.inHumidity
+#set $sec_hum_unit_label = $_unit_label($unit.label.inHumidity)
+#set $sec_hum_unit_type = $_unit_type($unit.unit_type.inHumidity)
+#try
+#if $current.extraHumid1.has_data
+#set $sec_hum_obs = $current.extraHumid1
+#set $sec_hum_unit_label = $_unit_label($unit.label.extraHumid1)
+#set $sec_hum_unit_type = $_unit_type($unit.unit_type.extraHumid1)
+#end if
+#except
+#pass
+#end try
+
+#set $wind_dir_deg = None
+#set $wind_dir_ord = None
+#try
+#if $current.windDir.has_data
+#set $wind_dir_deg = float($current.windDir.raw)
+#set $wind_dir_ord = str($current.windDir.ordinal_compass).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $feels_obs = $current.outTemp
+#try
+#if $current.appTemp.has_data
+#set $feels_obs = $current.appTemp
+#elif $current.windchill.has_data and $current.outTemp.has_data and float($current.windchill.raw) < float($current.outTemp.raw)
+#set $feels_obs = $current.windchill
+#elif $current.heatindex.has_data and $current.outTemp.has_data and float($current.heatindex.raw) > float($current.outTemp.raw)
+#set $feels_obs = $current.heatindex
+#end if
+#except
+#pass
+#end try
+
+#set $baro_trend = None
+#set $baro_trend_formatted = None
+#try
+#set $bt_vh = $trend(time_delta=10800).barometer
+#if $bt_vh.has_data
+#set $bt_f = float($bt_vh.raw)
+#if math.isfinite($bt_f)
+#set $baro_trend = $bt_f
+#set $baro_trend_formatted = str($bt_vh).strip()
+#end if
+#end if
+#except
+#pass
+#end try
+
+#set $rx_check = None
+#set $tx_batt = None
+#set $cons_volt = None
+#try
+#if $current.rxCheckPercent.has_data
+#set $rx_check = float($current.rxCheckPercent.raw)
+#end if
+#except
+#pass
+#end try
+#try
+#if $current.txBatteryStatus.has_data
+#set $tx_batt = int(round(float($current.txBatteryStatus.raw)))
+#end if
+#except
+#pass
+#end try
+#try
+#if $current.consBatteryVoltage.has_data
+#set $cons_volt = str($current.consBatteryVoltage).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $lightning_strikes = 0
+#set $lightning_distance = None
+#set $lightning_last_time = None
+#try
+#if $day.lightning_strike_count.sum.has_data
+#set $lightning_strikes = int(round(float($day.lightning_strike_count.sum.raw)))
+#end if
+#except
+#pass
+#end try
+#try
+#if $current.lightning_distance.has_data
+#set $lightning_distance = str($current.lightning_distance).strip()
+#end if
+#except
+#pass
+#end try
+#try
+#if $day.lightning_strike_count.max.has_data and float($day.lightning_strike_count.max.raw) > 0
+#set $lightning_last_time = str($day.lightning_strike_count.lasttime.format('%I:%M %p')).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $station_obj = {"code": $station_code, "location": str($station.location).strip(), "lat": $lat_val, "lon": $lon_val, "altitude": str($station.altitude).strip(), "hardware": str($station.hardware).strip(), "uptime": str($station.uptime).strip()}
+#set $almanac_obj = {"sunrise": str($almanac.sunrise).strip(), "sunset": str($almanac.sunset).strip(), "moonPhase": str($almanac.moon_phase).strip(), "moonFullness": str($almanac.moon_fullness).strip()}
+
+#set $rain_units_pref = str($Extras.get('rain_units', 'auto') or 'auto').strip().lower()
+#set $raw_rain_ut = $_unit_type($unit.unit_type.rain).lower()
+#set $raw_rr_ut = $_unit_type($unit.unit_type.rainRate).lower()
+#set $use_inch_rain = ($rain_units_pref == 'inch') or ($rain_units_pref == 'auto' and 'inch' in $raw_rain_ut)
+#if $use_inch_rain
+#set $rain_scale = 1.0 if 'inch' in $raw_rain_ut else (0.39370079 if 'cm' in $raw_rain_ut else 0.03937008)
+#set $rainrate_scale = 1.0 if 'inch' in $raw_rr_ut else (0.39370079 if 'cm' in $raw_rr_ut else 0.03937008)
+#set $u_rain_label = "in"
+#set $u_rain_type = "inch"
+#set $u_rr_label = "in/h"
+#set $u_rr_type = "inch_per_hour"
+#else
+#set $rain_scale = 10.0 if 'cm' in $raw_rain_ut else (25.4 if 'inch' in $raw_rain_ut else 1.0)
+#set $rainrate_scale = 10.0 if 'cm' in $raw_rr_ut else (25.4 if 'inch' in $raw_rr_ut else 1.0)
+#set $u_rain_label = "mm"
+#set $u_rain_type = "mm"
+#set $u_rr_label = "mm/h"
+#set $u_rr_type = "mm_per_hour"
+#end if
+
+#set $units_obj = {}
+#silent $units_obj.update({"outTemp": {"label": $_unit_label($unit.label.outTemp), "type": $_unit_type($unit.unit_type.outTemp)}})
+#silent $units_obj.update({"dewpoint": {"label": $_unit_label($unit.label.dewpoint), "type": $_unit_type($unit.unit_type.dewpoint)}})
+#silent $units_obj.update({"outHumidity": {"label": $_unit_label($unit.label.outHumidity), "type": $_unit_type($unit.unit_type.outHumidity)}})
+#silent $units_obj.update({"barometer": {"label": $_unit_label($unit.label.barometer), "type": $_unit_type($unit.unit_type.barometer)}})
+#silent $units_obj.update({"windSpeed": {"label": $_unit_label($unit.label.windSpeed), "type": $_unit_type($unit.unit_type.windSpeed)}})
+#silent $units_obj.update({"rain": {"label": $u_rain_label, "type": $u_rain_type}})
+#silent $units_obj.update({"rainRate": {"label": $u_rr_label, "type": $u_rr_type}})
+#silent $units_obj.update({"secondaryTemp": {"label": $sec_temp_unit_label, "type": $sec_temp_unit_type}})
+#silent $units_obj.update({"secondaryHumid": {"label": $sec_hum_unit_label, "type": $sec_hum_unit_type}})
+
+#set $cur_obj = {}
+#silent $cur_obj.update({"outTemp": $_obs_num($current.outTemp), "outTempFormatted": $_obs_str($current.outTemp)})
+#silent $cur_obj.update({"feelsLike": $_obs_num($feels_obs), "feelsLikeFormatted": $_obs_str($feels_obs)})
+#silent $cur_obj.update({"dewpoint": $_obs_num($current.dewpoint), "dewpointFormatted": $_obs_str($current.dewpoint)})
+#silent $cur_obj.update({"outHumidity": $_obs_num($current.outHumidity), "outHumidityFormatted": $_obs_str($current.outHumidity)})
+#silent $cur_obj.update({"barometer": $_obs_num($current.barometer), "barometerFormatted": $_obs_str($current.barometer), "barometerTrend": $baro_trend, "barometerTrendFormatted": $baro_trend_formatted})
+#silent $cur_obj.update({"windSpeed": $_obs_num($current.windSpeed), "windSpeedFormatted": $_obs_str($current.windSpeed), "windGust": $_obs_num($current.windGust), "windDir": $wind_dir_deg, "windDirOrdinal": $wind_dir_ord})
+#silent $cur_obj.update({"rainToday": $_obs_num($day.rain.sum, $rain_scale), "rainTodayFormatted": $_obs_rain_str($day.rain.sum, $rain_scale, "%.1f"), "rainRate": $_obs_num($current.rainRate, $rainrate_scale), "rainRateFormatted": $_obs_rain_str($current.rainRate, $rainrate_scale, "%.2f")})
+#silent $cur_obj.update({"secondaryTemp": $_obs_num($sec_temp_obs), "secondaryTempFormatted": $_obs_str($sec_temp_obs)})
+#silent $cur_obj.update({"secondaryHumid": $_obs_num($sec_hum_obs), "secondaryHumidFormatted": $_obs_str($sec_hum_obs)})
+#silent $cur_obj.update({"lightningStrikesToday": $lightning_strikes, "lightningDistance": $lightning_distance, "lightningLastTime": $lightning_last_time})
+#silent $cur_obj.update({"rxCheckPercent": $rx_check, "txBatteryStatus": $tx_batt, "consBatteryVoltage": $cons_volt})
+
+#set $payload = {"generated": int($current.dateTime.raw) if $current.dateTime.has_data else None, "generatedFormatted": str($current.dateTime).strip(), "station": $station_obj, "almanac": $almanac_obj, "units": $units_obj, "current": $cur_obj}
+#echo json.dumps($payload, indent=2)

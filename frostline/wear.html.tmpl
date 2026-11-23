@@ -1,0 +1,350 @@
+#errorCatcher Echo
+#import json
+#import math
+
+#set $station_code = str($Extras.get('station_code', '') or '').strip() or str($station.location).strip()
+#set $brand_prefix = str($Extras['brand_prefix'] if 'brand_prefix' in $Extras else '').strip()
+#set $brand_primary = str($Extras.get('brand_primary', 'FROST') or 'FROST').strip()
+#set $brand_secondary = str($Extras.get('brand_secondary', 'LINE') or 'LINE').strip()
+#set $brand_full = ($brand_prefix + ' ' if $brand_prefix else '') + $brand_primary + $brand_secondary
+#set $quip_tone = str($Extras.get('quip_tone', 'snarky')).strip().lower() or 'snarky'
+#set $show_wear_running = str($Extras.get('show_wear_running', 'false')).strip().lower() == 'true'
+#set $show_wear_sar = str($Extras.get('show_wear_sar', 'false')).strip().lower() == 'true'
+#set $rain_units_pref = str($Extras.get('rain_units', 'auto') or 'auto').strip().lower()
+#set $asset_ver = str($Extras.get('asset_version', '20261123-9') or '20261123-9').strip()
+
+#def _safe_num($vh, $scale=1.0)
+#try
+#if $vh.has_data
+#set $f = float($vh.raw) * $scale
+#if math.isfinite($f)
+#return round($f, 4)
+#end if
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#set $lat_val = 0.0
+#set $lon_val = 0.0
+#try
+#set $lat_val = float($station.stn_info.latitude_f)
+#except
+#try
+#set $lat_val = float($station.latitude.raw)
+#except
+#set $lat_val = 0.0
+#end try
+#end try
+#try
+#set $lon_val = float($station.stn_info.longitude_f)
+#except
+#try
+#set $lon_val = float($station.longitude.raw)
+#except
+#set $lon_val = 0.0
+#end try
+#end try
+
+#set $temp_unit_label = str($unit.label.outTemp).strip()
+#set $temp_unit_type = str($unit.unit_type.outTemp).strip()
+#set $wind_unit_label = str($unit.label.windSpeed).strip()
+#set $wind_unit_type = str($unit.unit_type.windSpeed).strip()
+#set $raw_rain_ut = str($unit.unit_type.rain).strip().lower()
+#set $raw_rr_ut = str($unit.unit_type.rainRate).strip().lower()
+#set $use_inch_rain = ($rain_units_pref == 'inch') or ($rain_units_pref == 'auto' and 'inch' in $raw_rain_ut)
+#if $use_inch_rain
+#set $rain_scale = 1.0 if 'inch' in $raw_rain_ut else (0.39370079 if 'cm' in $raw_rain_ut else 0.03937008)
+#set $rainrate_scale = 1.0 if 'inch' in $raw_rr_ut else (0.39370079 if 'cm' in $raw_rr_ut else 0.03937008)
+#set $rain_unit_label = 'in'
+#set $rain_unit_type = 'inch'
+#else
+#set $rain_scale = 10.0 if 'cm' in $raw_rain_ut else (25.4 if 'inch' in $raw_rain_ut else 1.0)
+#set $rainrate_scale = 10.0 if 'cm' in $raw_rr_ut else (25.4 if 'inch' in $raw_rr_ut else 1.0)
+#set $rain_unit_label = 'mm'
+#set $rain_unit_type = 'mm'
+#end if
+#set $baro_unit_label = str($unit.label.barometer).strip()
+
+#set $feels_obs = $current.outTemp
+#try
+#if $current.appTemp.has_data
+#set $feels_obs = $current.appTemp
+#elif $current.windchill.has_data and $current.outTemp.has_data and float($current.windchill.raw) < float($current.outTemp.raw)
+#set $feels_obs = $current.windchill
+#elif $current.heatindex.has_data and $current.outTemp.has_data and float($current.heatindex.raw) > float($current.outTemp.raw)
+#set $feels_obs = $current.heatindex
+#end if
+#except
+#pass
+#end try
+
+#set $baro_trend_num = None
+#try
+#set $bt_vh = $trend(time_delta=10800).barometer
+#if $bt_vh.has_data
+#set $bt_f = float($bt_vh.raw)
+#if math.isfinite($bt_f)
+#set $baro_trend_num = $bt_f
+#end if
+#end if
+#except
+#pass
+#end try
+
+#set $almanac_obj = {"sunrise": str($almanac.sunrise).strip(), "sunset": str($almanac.sunset).strip()}
+#set $current_obs = {"outTemp": $_safe_num($current.outTemp), "feelsLike": $_safe_num($feels_obs), "outHumidity": $_safe_num($current.outHumidity), "windSpeed": $_safe_num($current.windSpeed), "windGust": $_safe_num($current.windGust), "rainToday": $_safe_num($day.rain.sum, $rain_scale), "rainRate": $_safe_num($current.rainRate, $rainrate_scale), "barometerTrend": $baro_trend_num}
+#set $runtime_config = {"page": "wear", "stationCode": $station_code, "location": str($station.location).strip(), "lat": $lat_val, "lon": $lon_val, "quipTone": $quip_tone, "almanac": $almanac_obj, "currentObs": $current_obs, "units": {"tempType": $temp_unit_type, "tempLabel": $temp_unit_label, "windType": $wind_unit_type, "windLabel": $wind_unit_label, "rainType": $rain_unit_type, "rainLabel": $rain_unit_label, "baroLabel": $baro_unit_label}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      var p = new URLSearchParams(window.location.search).get("theme");
+      var s = (p === "light" || p === "dark") ? p : localStorage.getItem("color-scheme");
+      if (s === "light" || s === "dark") {
+        document.documentElement.setAttribute("data-theme", s);
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (e) {}
+  </script>
+  <title>What to Wear &mdash; $station_code | $brand_full</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icons/frostline-logo.svg?v=$asset_ver">
+  <link rel="stylesheet" href="assets/css/style.css?v=$asset_ver">
+</head>
+<body class="page-wear">
+  <a href="#main-content" class="skip-link visually-hidden">Skip to what to wear guide</a>
+
+  <header class="app-header">
+    <div class="top-brand-bar">
+      <div class="brand-bar-inner">
+        <div class="brand-left">
+          <a href="index.html" class="brand-logo" aria-label="$brand_full Weather Dashboard">
+            <svg class="brand-mark" viewBox="0 0 32 32" width="24" height="24" fill="none" aria-hidden="true">
+              <g stroke="var(--accent-cyan, #00A8E8)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(60 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(120 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <polygon points="16 13.4 18.25 14.7 18.25 17.3 16 18.6 13.75 17.3 13.75 14.7" fill="var(--accent-cyan, #00A8E8)" fill-opacity="0.22"/>
+              </g>
+              <circle cx="16" cy="16" r="1.2" fill="var(--accent-cyan, #00A8E8)"/>
+            </svg>
+            <span class="brand-wordmark">
+              #if $brand_prefix
+              <span class="brand-prefix">$brand_prefix</span>#slurp
+              #end if
+              <span class="brand-primary">$brand_primary</span><span class="brand-secondary">$brand_secondary</span>
+            </span>
+          </a>
+        </div>
+        <div class="brand-center">
+          <h1 class="station-heading">$station.location &mdash; What to Wear</h1>
+        </div>
+        <div class="brand-right">
+          <span class="last-updated-badge">Updated $current.dateTime</span>
+          <a href="index.html" class="icon-action-btn" aria-label="Back to overview dashboard">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1v-9.5Z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <nav class="station-nav-bar" aria-label="Dashboard navigation">
+      <div class="station-nav-inner">
+        <ul class="nav-tabs">
+          <li>
+            <a href="index.html" class="nav-tab">
+              <span class="station-code-pill">$station_code</span>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="charts.html" class="nav-tab">
+              <span>Charts</span>
+            </a>
+          </li>
+          <li>
+            <a href="records.html" class="nav-tab">
+              <span>Records</span>
+            </a>
+          </li>
+          <li>
+            <a href="wear.html" class="nav-tab is-active" aria-current="page">
+              <span>What to Wear</span>
+            </a>
+          </li>
+          <li>
+            <a href="station.html" class="nav-tab">
+              <span>Station</span>
+            </a>
+          </li>
+        </ul>
+        <div class="nav-theme-control">
+          <label for="theme-select" class="visually-hidden">Color theme</label>
+          <select id="theme-select" class="theme-select">
+            <option value="auto">Auto</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content" class="wear-main">
+    <section class="wear-toolbar" aria-label="Timeframe and conditions">
+      <div class="wear-toolbar-main">
+        <div class="wear-condition-chips" id="wear-condition-chips">
+          <span class="wear-chip is-primary" id="wear-chip-temp">Temp: $current.outTemp</span>
+          <span class="wear-chip" id="wear-chip-feels">Feels: $feels_obs</span>
+          <span class="wear-chip" id="wear-chip-wind">Wind: $current.windSpeed</span>
+          <span class="wear-chip" id="wear-chip-sky">Live Station</span>
+        </div>
+        <p class="wear-summary-note" id="wear-summary-note">Calculating layers from your live station sensors&hellip;</p>
+      </div>
+      <div class="wear-toolbar-controls">
+        <label for="wear-time-select" class="wear-control-label">When</label>
+        <select id="wear-time-select" class="cyan-select">
+          <option value="now" selected>Right Now (Live Station)</option>
+          <option value="plus2">In 2 Hours</option>
+          <option value="tomorrow_morning">Tomorrow Morning (7 a.m.)</option>
+          <option value="tomorrow_midday">Tomorrow Midday (12 p.m.)</option>
+          <option value="tomorrow_evening">Tomorrow Evening (6 p.m.)</option>
+        </select>
+      </div>
+    </section>
+
+    <div class="wear-grid">
+      <!-- Card 1: Regular Day Outfit -->
+      <section class="sensor-card wear-card" id="wear-regular-card" aria-labelledby="wear-regular-title">
+        <div class="card-header has-status-bar">
+          <span class="card-header-title-group">
+            <h2 id="wear-regular-title" class="card-header-title">Regular Day</h2>
+            <span class="wear-card-badge" id="wear-regular-badge">Everyday &amp; Commute</span>
+          </span>
+        </div>
+        <div class="card-body">
+          <p class="wear-card-intro" id="wear-regular-intro">Practical layering for walking, errands, and time outdoors.</p>
+          <div class="wear-items-list" id="wear-regular-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <!-- Card 2: Running Kit -->
+      #if $show_wear_running
+      <section class="sensor-card wear-card" id="wear-running-card" aria-labelledby="wear-running-title">
+        <div class="card-header has-status-bar">
+          <span class="card-header-title-group">
+            <h2 id="wear-running-title" class="card-header-title">Running Kit</h2>
+            <span class="wear-card-badge is-cyan" id="run-effective-feel">Run Feel: --</span>
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="run-prefs-panel" aria-label="Runner preferences">
+            <div class="run-pref-group">
+              <span class="run-pref-label">How do you like to feel?</span>
+              <div class="run-pref-buttons" role="group" aria-label="Thermal preference">
+                <button type="button" class="run-pref-btn" data-run-thermal="-3">Cooler</button>
+                <button type="button" class="run-pref-btn is-active" data-run-thermal="0">Average</button>
+                <button type="button" class="run-pref-btn" data-run-thermal="3">Warmer</button>
+              </div>
+            </div>
+            <div class="run-pref-group">
+              <span class="run-pref-label">Workout intensity</span>
+              <div class="run-pref-buttons" role="group" aria-label="Workout intensity">
+                <button type="button" class="run-pref-btn" data-run-effort="-1">Easy</button>
+                <button type="button" class="run-pref-btn is-active" data-run-effort="0">Normal</button>
+                <button type="button" class="run-pref-btn" data-run-effort="2">Workout / Race</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="wear-card-intro" id="wear-running-intro">Running kit accounting for the +10°C (+18°F) metabolic warm-up once you hit your stride.</p>
+          <div class="wear-items-list" id="wear-running-list" aria-live="polite"></div>
+        </div>
+      </section>
+      #end if
+
+      <!-- Card 3: Search & Rescue (GSAR 12-Hour Callout: What to Wear Now vs What to Pack) -->
+      #if $show_wear_sar
+      <section class="sensor-card wear-card wear-card-sar" id="wear-sar-card" aria-labelledby="wear-sar-title">
+        <div class="card-header has-status-bar">
+          <span class="card-header-title-group">
+            <h2 id="wear-sar-title" class="card-header-title">Search &amp; Rescue (GSAR 12-Hour Callout)</h2>
+            <span class="wear-card-badge is-cyan" id="sar-role-badge">Grid / Brush Team</span>
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="sar-controls-row">
+            <div class="run-pref-group">
+              <span class="run-pref-label">Task Assignment / Field Role</span>
+              <div class="run-pref-buttons sar-role-buttons" role="group" aria-label="Search and rescue field role">
+                <button type="button" class="run-pref-btn" data-sar-role="hasty">Hasty / Track (High Output)</button>
+                <button type="button" class="run-pref-btn is-active" data-sar-role="grid">Grid / Brush (Standard)</button>
+                <button type="button" class="run-pref-btn" data-sar-role="static">Command / Rigging (Static)</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sar-envelope-bar" id="sar-12h-envelope" aria-live="polite">
+            <div class="sar-env-metric">
+              <span class="sar-env-label">Now &rarr; 12h Floor</span>
+              <span class="sar-env-value" id="sar-env-temp">$feels_obs &rarr; --</span>
+            </div>
+            <div class="sar-env-metric">
+              <span class="sar-env-label">12h Precip &amp; Freeze Risk</span>
+              <span class="sar-env-value" id="sar-env-precip">Checking 12h window&hellip;</span>
+            </div>
+            <div class="sar-env-metric">
+              <span class="sar-env-label">12h Peak Wind / Gusts</span>
+              <span class="sar-env-value" id="sar-env-wind">$current.windSpeed</span>
+            </div>
+            <div class="sar-env-metric">
+              <span class="sar-env-label">Night Ops / Sunset</span>
+              <span class="sar-env-value" id="sar-env-dark">Sunset $almanac.sunset</span>
+            </div>
+          </div>
+
+          <div class="sar-columns-grid">
+            <div class="sar-column">
+              <div class="sar-column-header">
+                <h3 class="sar-column-title">What to Wear Now</h3>
+                <span class="sar-column-sub">On Body at Staging &mdash; Active Movement</span>
+              </div>
+              <p class="wear-card-intro" id="sar-wear-intro">Start slightly cool (&ldquo;be bold, start cold&rdquo;) with zero cotton so you don&rsquo;t sweat-soak your base layer under a pack.</p>
+              <div class="wear-items-list" id="sar-wear-list" aria-live="polite"></div>
+            </div>
+
+            <div class="sar-column">
+              <div class="sar-column-header is-pack">
+                <h3 class="sar-column-title">What to Pack (Next 12 Hours)</h3>
+                <span class="sar-column-sub">24-Hour Ready Pack &mdash; Static Holds &amp; Weather Shift</span>
+              </div>
+              <p class="wear-card-intro" id="sar-pack-intro">Stowed for sudden 60-minute static holds (clue/patient/radio relay) and the 12-hour forecast low.</p>
+              <div class="wear-items-list" id="sar-pack-list" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      #end if
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>$station.location &middot; $station.hardware &middot; WeeWX $station.version</span>
+  </footer>
+
+  <div id="status-toast" class="status-toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    window.FROSTLINE_CONFIG = #echo json.dumps($runtime_config).replace('</', '<\\/')#;
+  </script>
+  <script src="assets/js/app.js?v=$asset_ver" defer></script>
+</body>
+</html>

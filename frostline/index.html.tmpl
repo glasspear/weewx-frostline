@@ -1,0 +1,869 @@
+#errorCatcher Echo
+#import datetime
+#import json
+#import math
+#import os
+#import time
+#import urllib.request
+
+#set $station_code = str($Extras.get('station_code', '') or '').strip() or str($station.location).strip()
+#set $brand_prefix = str($Extras['brand_prefix'] if 'brand_prefix' in $Extras else '').strip()
+#set $brand_primary = str($Extras.get('brand_primary', 'FROST') or 'FROST').strip()
+#set $brand_secondary = str($Extras.get('brand_secondary', 'LINE') or 'LINE').strip()
+#set $brand_full = ($brand_prefix + ' ' if $brand_prefix else '') + $brand_primary + $brand_secondary
+#set $primary_title = str($Extras.get('primary_sensor_title', '5-in-1 Weather Station')).strip()
+#set $secondary_title = str($Extras.get('secondary_sensor_title', 'Lightning Tower')).strip()
+#set $show_lightning = str($Extras.get('show_lightning', 'true')).strip().lower() == 'true'
+#set $show_windy = str($Extras.get('show_windy', 'true')).strip().lower() == 'true'
+#set $show_forecast = str($Extras.get('show_forecast', 'true')).strip().lower() == 'true'
+#set $show_alerts = str($Extras.get('show_alerts', 'true')).strip().lower() == 'true'
+#set $alerts_provider = str($Extras.get('alerts_provider', 'auto')).strip().lower() or 'auto'
+#set $show_station_health = str($Extras.get('show_station_health', 'true')).strip().lower() == 'true'
+#set $show_quip = str($Extras.get('show_quip', 'true')).strip().lower() == 'true'
+#set $quip_tone = str($Extras.get('quip_tone', 'snarky')).strip().lower() or 'snarky'
+#set $show_tides = str($Extras.get('show_tides', 'true')).strip().lower() == 'true'
+#set $tide_provider = str($Extras.get('tide_provider', 'auto') or 'auto').strip().lower()
+#set $tide_units_pref = str($Extras.get('tide_units', 'auto') or 'auto').strip().lower()
+#set $tide_title = str($Extras.get('tide_title', 'Local Tides') or 'Local Tides').strip()
+#set $tide_station_name = str($Extras.get('tide_station_name', 'Local Harbour') or 'Local Harbour').strip()
+#set $tide_station_code = str($Extras.get('tide_station_code', '') or '').strip()
+#set $tide_station_id = str($Extras.get('tide_station_id', '') or '').strip()
+#set $show_air_quality = str($Extras.get('show_air_quality', 'true')).strip().lower() == 'true'
+#set $aqi_standard = str($Extras.get('aqi_standard', 'auto') or 'auto').strip().lower()
+#set $rain_units_pref = str($Extras.get('rain_units', 'auto') or 'auto').strip().lower()
+#set $windy_overlay = str($Extras.get('windy_overlay', 'radar')).strip() or 'radar'
+#set $windy_zoom = str($Extras.get('windy_zoom', '8')).strip() or '8'
+#set $asset_ver = str($Extras.get('asset_version', '20261123-9') or '20261123-9').strip()
+
+#def _safe_num($vh, $scale=1.0)
+#try
+#if $vh.has_data
+#set $f = float($vh.raw) * $scale
+#if math.isfinite($f)
+#return round($f, 4)
+#end if
+#end if
+#except
+#pass
+#end try
+#return None
+#end def
+
+#set $lat_val = 0.0
+#set $lon_val = 0.0
+#try
+#set $lat_val = float($station.stn_info.latitude_f)
+#except
+#try
+#set $lat_val = float($station.latitude.raw)
+#except
+#set $lat_val = 0.0
+#end try
+#end try
+#try
+#set $lon_val = float($station.stn_info.longitude_f)
+#except
+#try
+#set $lon_val = float($station.longitude.raw)
+#except
+#set $lon_val = 0.0
+#end try
+#end try
+
+#set $temp_unit_label = str($unit.label.outTemp).strip()
+#set $temp_unit_type = str($unit.unit_type.outTemp).strip()
+#set $wind_unit_label = str($unit.label.windSpeed).strip()
+#set $wind_unit_type = str($unit.unit_type.windSpeed).strip()
+#set $raw_rain_ut = str($unit.unit_type.rain).strip().lower()
+#set $raw_rr_ut = str($unit.unit_type.rainRate).strip().lower()
+#set $use_inch_rain = ($rain_units_pref == 'inch') or ($rain_units_pref == 'auto' and 'inch' in $raw_rain_ut)
+#if $use_inch_rain
+#set $rain_scale = 1.0 if 'inch' in $raw_rain_ut else (0.39370079 if 'cm' in $raw_rain_ut else 0.03937008)
+#set $rainrate_scale = 1.0 if 'inch' in $raw_rr_ut else (0.39370079 if 'cm' in $raw_rr_ut else 0.03937008)
+#set $rain_unit_label = 'in'
+#set $rain_unit_type = 'inch'
+#set $rain_fmt = '%.2f'
+#else
+#set $rain_scale = 10.0 if 'cm' in $raw_rain_ut else (25.4 if 'inch' in $raw_rain_ut else 1.0)
+#set $rainrate_scale = 10.0 if 'cm' in $raw_rr_ut else (25.4 if 'inch' in $raw_rr_ut else 1.0)
+#set $rain_unit_label = 'mm'
+#set $rain_unit_type = 'mm'
+#set $rain_fmt = '%.1f'
+#end if
+#set $baro_unit_label = str($unit.label.barometer).strip()
+#set $dew_unit_label = str($unit.label.dewpoint).strip()
+#set $aqi_standard_label = 'CA AQHI' if $aqi_standard == 'ca_aqhi' else ('EAQI' if ($aqi_standard == 'european_aqi' or ($aqi_standard == 'auto' and $lon_val >= -30.0)) else 'US AQI')
+#set $resolved_tide_unit = 'ft' if ($tide_units_pref == 'ft' or ($tide_units_pref == 'auto' and 'F' in $temp_unit_type)) else 'm'
+
+#set $windy_temp_unit = '°F' if 'F' in $temp_unit_type else '°C'
+#if 'mile' in $wind_unit_type
+#set $windy_wind_unit = 'mph'
+#elif 'knot' in $wind_unit_type
+#set $windy_wind_unit = 'kt'
+#elif 'meter' in $wind_unit_type
+#set $windy_wind_unit = 'm/s'
+#else
+#set $windy_wind_unit = 'km/h'
+#end if
+
+#set $temp_int = '--'
+#set $temp_dec = ''
+#try
+#if $current.outTemp.has_data
+#set $t_str = str($current.outTemp.format(add_label=False)).strip()
+#if '.' in $t_str
+#set $t_parts = $t_str.split('.', 1)
+#set $temp_int = $t_parts[0]
+#set $temp_dec = '.' + $t_parts[1]
+#else
+#set $temp_int = $t_str
+#end if
+#end if
+#except
+#pass
+#end try
+
+#set $today_high_str = '--'
+#set $today_low_str = '--'
+#try
+#if $day.outTemp.max.has_data
+#set $today_high_str = str($day.outTemp.max.format(add_label=False)).strip() + '°'
+#end if
+#if $day.outTemp.min.has_data
+#set $today_low_str = str($day.outTemp.min.format(add_label=False)).strip() + '°'
+#end if
+#except
+#pass
+#end try
+
+#set $baro_val = '--'
+#set $baro_trend_arrow = ''
+#set $baro_trend_class = ''
+#set $baro_trend_label = ''
+#try
+#if $current.barometer.has_data
+#set $baro_val = str($current.barometer.format(add_label=False)).strip()
+#end if
+#except
+#pass
+#end try
+#try
+#set $bt_vh = $trend(time_delta=10800).barometer
+#if $bt_vh.has_data
+#set $bt_val = float($bt_vh.raw)
+#set $bt_eps = 0.01 if 'inHg' in str($unit.unit_type.barometer) else 0.2
+#if $bt_val > $bt_eps
+#set $baro_trend_arrow = '▲'
+#set $baro_trend_class = 'is-rising'
+#set $baro_trend_label = 'Rising (' + str($bt_vh).strip() + '/3h)'
+#elif $bt_val < -$bt_eps
+#set $baro_trend_arrow = '▼'
+#set $baro_trend_class = 'is-falling'
+#set $baro_trend_label = 'Falling (' + str($bt_vh).strip() + '/3h)'
+#else
+#set $baro_trend_arrow = '—'
+#set $baro_trend_class = 'is-steady'
+#set $baro_trend_label = 'Steady (' + str($bt_vh).strip() + '/3h)'
+#end if
+#end if
+#except
+#pass
+#end try
+
+#set $feels_like_str = '--'
+#try
+#set $feels_obs = $current.outTemp
+#if $current.appTemp.has_data
+#set $feels_obs = $current.appTemp
+#elif $current.windchill.has_data and $current.outTemp.has_data and float($current.windchill.raw) < float($current.outTemp.raw)
+#set $feels_obs = $current.windchill
+#elif $current.heatindex.has_data and $current.outTemp.has_data and float($current.heatindex.raw) > float($current.outTemp.raw)
+#set $feels_obs = $current.heatindex
+#end if
+#if $feels_obs.has_data
+#set $feels_like_str = str($feels_obs).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $hum_val = '--%'
+#try
+#if $current.outHumidity.has_data
+#set $hum_val = str($current.outHumidity).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $wind_ord = ''
+#set $wind_speed_val = '--'
+#set $wind_arrow_deg = 0
+#set $has_wind_dir = False
+#try
+#if $current.windSpeed.has_data
+#set $wind_speed_val = str($current.windSpeed.format(add_label=False)).strip()
+#end if
+#if $current.windDir.has_data
+#set $has_wind_dir = True
+#set $wind_ord = str($current.windDir.ordinal_compass).strip()
+#set $wind_arrow_deg = int(round((float($current.windDir.raw) + 180.0) % 360.0))
+#end if
+#except
+#pass
+#end try
+
+#set $rain_today_val = '0.00' if $use_inch_rain else '0.0'
+#try
+#if $day.rain.sum.has_data and $day.rain.sum.raw is not None
+#set $rain_today_val = ($rain_fmt % (float($day.rain.sum.raw) * $rain_scale))
+#end if
+#except
+#pass
+#end try
+
+#set $dew_val = '--'
+#try
+#if $current.dewpoint.has_data
+#set $dew_val = str($current.dewpoint.format(add_label=False)).strip()
+#end if
+#except
+#pass
+#end try
+
+#set $lightning_strikes = 0
+#try
+#if $day.lightning_strike_count.sum.has_data
+#set $lightning_strikes = int(round(float($day.lightning_strike_count.sum.raw)))
+#end if
+#except
+#pass
+#end try
+#set $lightning_strike_label = '1 Strike' if $lightning_strikes == 1 else str($lightning_strikes) + ' Strikes'
+#set $lightning_pill_class = 'lightning-status-pill is-active-strike' if $lightning_strikes > 0 else 'lightning-status-pill'
+#set $lightning_pill_text = ('&#9889; ' + $lightning_strike_label) if $lightning_strikes > 0 else 'Lightning: Clear'
+
+#set $stale_threshold = 15
+#try
+#set $stale_threshold = int($Extras.get('stale_threshold_minutes', 15))
+#except
+#set $stale_threshold = 15
+#end try
+#set $last_report_epoch = int($current.dateTime.raw) if $current.dateTime.has_data else None
+
+#set $tides_events = []
+#set $tides_source = "harmonic"
+#set $now_ts = int(time.time())
+#set $is_preview_mock = "Preview Mock" in str($station.hardware)
+#set $resolved_tide_provider = $tide_provider
+#if $resolved_tide_provider == 'auto'
+#if $tide_station_id.isdigit() and len($tide_station_id) == 7
+#set $resolved_tide_provider = 'noaa'
+#elif len($tide_station_id) >= 16
+#set $resolved_tide_provider = 'dfo'
+#else
+#set $resolved_tide_provider = 'harmonic'
+#end if
+#end if
+#set $tide_attribution = "Predictions via NOAA Tides &amp; Currents (#" + $tide_station_id + ")" if $resolved_tide_provider == 'noaa' else ("Predictions via Fisheries &amp; Oceans Canada" + (" (CHS #" + $tide_station_code + ")" if $tide_station_code else "") if $resolved_tide_provider == 'dfo' else "Lunar harmonic tide model (" + $tide_station_name + ")")
+#if $show_tides and not $is_preview_mock and $resolved_tide_provider in ('dfo', 'noaa')
+#set $cache_key = $resolved_tide_provider + "_" + "".join([c for c in ($tide_station_id if $resolved_tide_provider == 'noaa' else $tide_station_code) if c.isalnum()])
+#set $cache_path = "/tmp/frostline_tides_" + $cache_key + ".json"
+#set $raw_list = None
+#try
+#if os.path.isfile($cache_path) and ($now_ts - int(os.path.getmtime($cache_path))) < 43200
+#set $fh = open($cache_path, "r", encoding="utf-8")
+#set $raw_list = json.loads($fh.read())
+#silent $fh.close()
+#set $tides_source = $resolved_tide_provider + "-cache"
+#end if
+#except
+#set $raw_list = None
+#end try
+#if $raw_list is None
+#try
+#if $resolved_tide_provider == 'noaa'
+#set $dt_from = datetime.datetime.fromtimestamp($now_ts - 43200, datetime.timezone.utc).strftime("%Y%m%d")
+#set $dt_to = datetime.datetime.fromtimestamp($now_ts + 172800, datetime.timezone.utc).strftime("%Y%m%d")
+#set $tide_url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=" + $dt_from + "&end_date=" + $dt_to + "&station=" + $tide_station_id + "&product=predictions&datum=MLLW&time_zone=gmt&interval=hilo&units=metric&format=json"
+#else
+#set $dt_from = datetime.datetime.fromtimestamp($now_ts - 43200, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+#set $dt_to = datetime.datetime.fromtimestamp($now_ts + 129600, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+#set $tide_url = "https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/" + $tide_station_id + "/data?time-series-code=wlp-hilo&from=" + $dt_from + "&to=" + $dt_to
+#end if
+#set $req = urllib.request.Request($tide_url, headers={"Accept": "application/json", "User-Agent": "WeeWX-Frostline/1.0"})
+#set $resp = urllib.request.urlopen($req, timeout=3.5)
+#set $body = $resp.read().decode("utf-8")
+#set $parsed = json.loads($body)
+#set $candidate = $parsed.get("predictions", []) if isinstance($parsed, dict) else $parsed
+#if isinstance($candidate, list) and len($candidate) >= 4
+#set $raw_list = $candidate
+#set $tides_source = $resolved_tide_provider + "-live"
+#try
+#set $wfh = open($cache_path, "w", encoding="utf-8")
+#silent $wfh.write(json.dumps($candidate))
+#silent $wfh.close()
+#except
+#pass
+#end try
+#end if
+#except
+#try
+#if os.path.isfile($cache_path)
+#set $fh = open($cache_path, "r", encoding="utf-8")
+#set $raw_list = json.loads($fh.read())
+#silent $fh.close()
+#set $tides_source = $resolved_tide_provider + "-stale-cache"
+#end if
+#except
+#set $raw_list = None
+#end try
+#end try
+#end if
+#if isinstance($raw_list, list) and len($raw_list) >= 3
+#for $idx in range(len($raw_list))
+#set $item = $raw_list[$idx]
+#if "t" in $item and "v" in $item
+#set $val = float($item.get("v", 0.0))
+#set $ev_iso = str($item.get("t", "")).replace(" ", "T") + ":00Z"
+#set $kind = "high" if str($item.get("type", "H")).upper().startswith("H") else "low"
+#else
+#set $val = float($item.get("value", 0.0))
+#set $ev_iso = str($item.get("eventDate", ""))
+#set $prev_v = float($raw_list[$idx - 1].get("value", $val)) if $idx > 0 else ($val - 1.0 if $val > 6.5 else $val + 1.0)
+#set $next_v = float($raw_list[$idx + 1].get("value", $val)) if ($idx + 1) < len($raw_list) else ($val - 1.0 if $val > 6.5 else $val + 1.0)
+#set $kind = "high" if ($val >= $prev_v and $val >= $next_v) else "low"
+#end if
+#silent $tides_events.append({"eventDate": $ev_iso, "value": round($val, 2), "type": $kind})
+#end for
+#end if
+#end if
+#if len($tides_events) < 4
+#set $tides_events = []
+#set $tides_source = "harmonic"
+#set $ref_high_ts = 1795354260.0
+#set $half_period = 22357.08
+#set $k_start = int(math.floor((($now_ts - 36000) - $ref_high_ts) / $half_period))
+#for $step in range(10)
+#set $k = $k_start + $step
+#set $ev_ts = int(round($ref_high_ts + $k * $half_period))
+#set $is_high = ($k % 2) == 0
+#set $diurnal = 0.28 * math.sin($k * 0.5)
+#set $h_val = (12.48 + $diurnal) if $is_high else (1.42 - ($diurnal * 0.5))
+#set $ev_iso = datetime.datetime.fromtimestamp($ev_ts, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+#silent $tides_events.append({"eventDate": $ev_iso, "value": round($h_val, 2), "type": ("high" if $is_high else "low")})
+#end for
+#end if
+#set $tides_payload = {"stationName": $tide_station_name, "stationCode": $tide_station_code, "source": $tides_source, "unit": $resolved_tide_unit, "events": $tides_events}
+
+#set $current_obs = {"outTemp": $_safe_num($current.outTemp), "feelsLike": $_safe_num($feels_obs), "outHumidity": $_safe_num($current.outHumidity), "windSpeed": $_safe_num($current.windSpeed), "windGust": $_safe_num($current.windGust), "rainToday": $_safe_num($day.rain.sum, $rain_scale), "rainRate": $_safe_num($current.rainRate, $rainrate_scale), "lightningStrikes": $lightning_strikes}
+#set $runtime_config = {"page": "dashboard", "stationCode": $station_code, "location": str($station.location).strip(), "lat": $lat_val, "lon": $lon_val, "showForecast": $show_forecast, "showAlerts": $show_alerts, "alertsProvider": $alerts_provider, "showQuip": $show_quip, "quipTone": $quip_tone, "showTides": $show_tides, "tides": $tides_payload, "showAirQuality": $show_air_quality, "aqiStandard": $aqi_standard, "lastReportEpoch": $last_report_epoch, "staleThresholdMinutes": $stale_threshold, "currentObs": $current_obs, "units": {"tempType": $temp_unit_type, "tempLabel": $temp_unit_label, "windType": $wind_unit_type, "windLabel": $wind_unit_label, "rainType": $rain_unit_type, "rainLabel": $rain_unit_label, "baroLabel": $baro_unit_label}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      var p = new URLSearchParams(window.location.search).get("theme");
+      var s = (p === "light" || p === "dark") ? p : localStorage.getItem("color-scheme");
+      if (s === "light" || s === "dark") {
+        document.documentElement.setAttribute("data-theme", s);
+        document.querySelector('meta[name="color-scheme"]').content = s;
+      }
+    } catch (e) {}
+  </script>
+  <title>$station_code — $station.location | $brand_full</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icons/frostline-logo.svg?v=$asset_ver">
+  <link rel="stylesheet" href="assets/css/style.css?v=$asset_ver">
+</head>
+<body class="page-dashboard">
+  <a href="#main-content" class="skip-link visually-hidden">Skip to weather dashboard</a>
+
+  <header class="app-header">
+    <div class="top-brand-bar">
+      <div class="brand-bar-inner">
+        <div class="brand-left">
+          <a href="index.html" class="brand-logo" aria-label="$brand_full Weather Dashboard">
+            <svg class="brand-mark" viewBox="0 0 32 32" width="24" height="24" fill="none" aria-hidden="true">
+              <g stroke="var(--accent-cyan, #00A8E8)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(60 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <path transform="rotate(120 16 16)" d="M16 2.8V13.4M16 18.6V29.2M12.8 6.4 16 9.6 19.2 6.4M13.9 10.2 16 12.2 18.1 10.2M12.8 25.6 16 22.4 19.2 25.6M13.9 21.8 16 19.8 18.1 21.8"/>
+                <polygon points="16 13.4 18.25 14.7 18.25 17.3 16 18.6 13.75 17.3 13.75 14.7" fill="var(--accent-cyan, #00A8E8)" fill-opacity="0.22"/>
+              </g>
+              <circle cx="16" cy="16" r="1.2" fill="var(--accent-cyan, #00A8E8)"/>
+            </svg>
+            <span class="brand-wordmark">
+              #if $brand_prefix
+              <span class="brand-prefix">$brand_prefix</span>#slurp
+              #end if
+              <span class="brand-primary">$brand_primary</span><span class="brand-secondary">$brand_secondary</span>
+            </span>
+          </a>
+        </div>
+        <div class="brand-center">
+          <h1 class="station-heading">$station.location</h1>
+        </div>
+        <div class="brand-right">
+          <span class="last-updated-badge" id="last-updated-text">Updated $current.dateTime</span>
+          <button type="button" class="icon-action-btn" id="header-action-btn" data-action="refresh" aria-label="Refresh forecast and live weather data">
+            <svg viewBox="0 0 28 24" width="24" height="22" aria-hidden="true">
+              <path fill="currentColor" d="M21.5 9.8A6.5 6.5 0 0 0 9.1 7.6 5.2 5.2 0 0 0 7.5 18h13.8a4.2 4.2 0 0 0 .2-8.2Zm-7.5 6.4-3.8-3.8h2.4V9h2.8v3.4h2.4L14 16.2Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="station-nav-bar" aria-label="Dashboard navigation">
+      <div class="station-nav-inner">
+        <ul class="nav-tabs">
+          <li>
+            <a href="index.html" class="nav-tab is-active" aria-current="page">
+              <span class="station-code-pill">$station_code</span>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="charts.html" class="nav-tab">
+              <span>Charts</span>
+            </a>
+          </li>
+          <li>
+            <a href="records.html" class="nav-tab">
+              <span>Records</span>
+            </a>
+          </li>
+          <li>
+            <a href="wear.html" class="nav-tab">
+              <span>What to Wear</span>
+            </a>
+          </li>
+          <li>
+            <a href="station.html" class="nav-tab">
+              <span>Station</span>
+            </a>
+          </li>
+        </ul>
+        <div class="nav-theme-control">
+          <label for="theme-select" class="visually-hidden">Color theme</label>
+          <select id="theme-select" class="theme-select">
+            <option value="auto">Auto</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content" class="dashboard-main">
+    #if $show_alerts
+    <section id="alerts-region" class="alerts-region" aria-label="Weather alerts" hidden>
+      <div id="alerts-minimized-bar" class="alerts-minimized-bar" hidden>
+        <button type="button" id="alerts-restore-btn" class="alerts-restore-btn">
+          <span class="alerts-dot" aria-hidden="true"></span>
+          <span id="alerts-minimized-text">Weather Alerts</span>
+          <span class="alerts-restore-action">Show</span>
+        </button>
+      </div>
+
+      <div id="alerts-panel" class="alerts-panel" hidden>
+        <div class="alerts-panel-header">
+          <div class="alerts-panel-title-group">
+            <span class="alerts-badge-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.3 3.9 1.8 18.1A2 2 0 0 0 3.5 21h17a2 2 0 0 0 1.7-2.9L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </span>
+            <h2 id="alerts-panel-title" class="alerts-panel-title">Weather Alerts</h2>
+            <span id="alerts-count-badge" class="alerts-count-badge">0 Active</span>
+          </div>
+          <button type="button" id="alerts-minimize-btn" class="alerts-minimize-btn">Minimize</button>
+        </div>
+        <div id="alerts-active-list" class="alerts-list"></div>
+        <details id="alerts-past-details" class="alerts-past-section" hidden>
+          <summary class="alerts-past-summary">
+            <span id="alerts-past-label">Past Alerts (Last 3 Days)</span>
+          </summary>
+          <div id="alerts-past-list" class="alerts-list is-past"></div>
+        </details>
+      </div>
+    </section>
+    #end if
+
+    <div class="dashboard-grid">
+
+      <!-- Card 1: Primary Weather Hero (Border-Top Status Bar, No Station Banner Header) -->
+      <section class="sensor-card card-primary has-top-status-bar" data-card-id="primary-station" aria-label="Current outdoor conditions">
+        <div class="card-body">
+          #if $show_quip or $show_lightning
+          <div class="primary-top-bar">
+            #if $show_quip
+            <div id="quip-banner" class="quip-banner is-inline" aria-label="Weather commentary">
+              <div class="quip-copy">
+                <p id="quip-headline" class="quip-headline">Checking how miserable it is outside...</p>
+                <p id="quip-subtext" class="quip-subtext"></p>
+              </div>
+              <div class="quip-controls">
+                <button type="button" id="quip-reroll-btn" class="quip-reroll-btn" aria-label="Another weather comment" title="Another comment">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12a9 9 0 0 0-15.4-6.4L3 8"/>
+                    <polyline points="3 3 3 8 8 8"/>
+                    <path d="M3 12a9 9 0 0 0 15.4 6.4L21 16"/>
+                    <polyline points="16 16 21 16 21 21"/>
+                  </svg>
+                </button>
+                <label for="quip-tone-select" class="visually-hidden">Commentary tone</label>
+                <select id="quip-tone-select" class="quip-tone-select">
+                  <option value="clean">Clean</option>
+                  <option value="snarky">Snarky</option>
+                  <option value="unfiltered">Unfiltered</option>
+                </select>
+              </div>
+            </div>
+            #end if
+            <div class="primary-top-badges">
+              <span class="sensor-status-pill" data-sensor-status hidden>Offline</span>
+              #if $show_lightning
+              <a href="charts.html?metric=lightning&amp;sensor=tower&amp;period=today" class="$lightning_pill_class" title="View lightning strikes &amp; distance chart">$lightning_pill_text</a>
+              #end if
+            </div>
+          </div>
+          #else
+          <span class="sensor-status-pill" data-sensor-status hidden>Offline</span>
+          #end if
+
+          <div class="primary-main-layout">
+            <div class="primary-hero-row">
+              <div class="condition-block">
+                <div class="condition-icon" id="weather-condition-icon" aria-hidden="true">
+                  <svg viewBox="0 0 64 48" width="68" height="52" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 39h29a10 10 0 0 0 1.4-19.9A13.5 13.5 0 0 0 22.8 14.8 11 11 0 0 0 18 39Z"/>
+                  </svg>
+                </div>
+                <p class="condition-summary" id="weather-condition-text">Current outdoor conditions</p>
+              </div>
+              <div class="hero-temp-col">
+                <a href="charts.html?metric=temperature&amp;period=today" class="hero-temp" aria-label="Outdoor temperature $current.outTemp, view temperature chart">
+                  <span class="hero-temp-int">$temp_int</span>
+                  <span class="hero-temp-stack">
+                    <span class="hero-temp-unit">$temp_unit_label</span>
+                    #if $temp_dec
+                    <span class="hero-temp-dec">$temp_dec</span>
+                    #end if
+                  </span>
+                </a>
+                <p class="feels-like-readout">Feels like <span class="feels-like-value">$feels_like_str</span></p>
+                <p class="highlow-readout">High <span>$today_high_str</span> <span aria-hidden="true">/</span> Low <span>$today_low_str</span></p>
+              </div>
+            </div>
+
+            <div class="primary-metrics-grid is-five-up">
+              <a href="charts.html?metric=wind&amp;period=today" class="metric-cell">
+                #if $has_wind_dir
+                <span class="metric-icon wind-dir-icon" style="--wind-deg: ${wind_arrow_deg}deg;" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="30" height="30" fill="none">
+                    <polygon points="20 5 31 33 20 27 9 33" fill="currentColor"/>
+                  </svg>
+                </span>
+                #else
+                <span class="metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M7 15h19a4 4 0 1 0-4-4"/>
+                    <path d="M7 22h24a3.5 3.5 0 1 1-3.5 3.5"/>
+                    <path d="M10 29h12"/>
+                  </svg>
+                </span>
+                #end if
+                <span class="metric-text-stack">
+                  <span class="metric-label">Wind</span>
+                  <span class="metric-reading">
+                    #if $wind_ord
+                    <span class="metric-value">$wind_ord $wind_speed_val</span>
+                    #else
+                    <span class="metric-value">$wind_speed_val</span>
+                    #end if
+                    <span class="metric-unit">$wind_unit_label</span>
+                  </span>
+                </span>
+              </a>
+
+              <a href="charts.html?metric=humidity&amp;period=today" class="metric-cell">
+                <span class="metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 5.5C20 5.5 9.5 18 9.5 25a10.5 10.5 0 0 0 21 0C30.5 18 20 5.5 20 5.5Z"/>
+                    <circle cx="17" cy="22.5" r="1.6" stroke-width="1.8"/>
+                    <circle cx="23" cy="28.5" r="1.6" stroke-width="1.8"/>
+                    <line x1="23.5" y1="21.5" x2="16.5" y2="29.5" stroke-width="1.9"/>
+                  </svg>
+                </span>
+                <span class="metric-text-stack">
+                  <span class="metric-label">Humidity</span>
+                  <span class="metric-reading">
+                    <span class="metric-value">$hum_val</span>
+                  </span>
+                </span>
+              </a>
+
+              <a href="charts.html?metric=dewpoint&amp;period=today" class="metric-cell">
+                <span class="metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="34" height="34" fill="none">
+                    <path d="M8 29C7.5 18.5 14 11 26.5 9.5C25.5 20.5 19.5 27.5 9.5 28.5" fill="#7AC143"/>
+                    <path d="M8 29C12 23 18 17.5 26.5 9.5" stroke="#1A1D1E" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M5.5 31.5C7 29.5 8.5 28.5 10.5 28" stroke="#7AC143" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M29.5 20C29.5 20 25 25.6 25 28.8a4.5 4.5 0 0 0 9 0C34 25.6 29.5 20 29.5 20Z" fill="#00A8E8"/>
+                  </svg>
+                </span>
+                <span class="metric-text-stack">
+                  <span class="metric-label">Dew Point</span>
+                  <span class="metric-reading">
+                    <span class="metric-value">$dew_val</span>
+                    <span class="metric-unit">$dew_unit_label</span>
+                  </span>
+                </span>
+              </a>
+
+              <a href="charts.html?metric=barometer&amp;period=today" class="metric-cell">
+                <span class="metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="20" cy="20" r="16"/>
+                    <circle cx="20" cy="20" r="11.5" stroke-opacity="0.65" stroke-width="1.6"/>
+                    <line x1="20" y1="5" x2="20" y2="8"/>
+                    <line x1="20" y1="32" x2="20" y2="35"/>
+                    <line x1="5" y1="20" x2="8" y2="20"/>
+                    <line x1="32" y1="20" x2="35" y2="20"/>
+                    <line x1="12" y1="20" x2="28" y2="20" stroke-width="2.4"/>
+                    <polyline points="24 16.5 28.5 20 24 23.5" stroke-width="2.4"/>
+                    <circle cx="20" cy="20" r="2.2" fill="currentColor"/>
+                  </svg>
+                </span>
+                <span class="metric-text-stack">
+                  <span class="metric-label">Pressure</span>
+                  <span class="metric-reading">
+                    <span class="metric-value">$baro_val</span>
+                    <span class="metric-unit">$baro_unit_label</span>
+                    #if $baro_trend_arrow
+                    <span class="baro-trend $baro_trend_class" aria-label="Barometer trend $baro_trend_label">$baro_trend_arrow</span>
+                    #end if
+                  </span>
+                </span>
+              </a>
+
+              <a href="charts.html?metric=rain&amp;period=today" class="metric-cell">
+                <span class="metric-icon is-cyan" aria-hidden="true">
+                  <svg viewBox="0 0 40 40" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6C11.7 6 5.5 12.1 5.5 19.5h29C34.5 12.1 28.3 6 20 6Z" fill="currentColor" fill-opacity="0.9"/>
+                    <line x1="20" y1="4" x2="20" y2="6"/>
+                    <path d="M20 19.5V31a3.2 3.2 0 0 1-6.4 0"/>
+                  </svg>
+                </span>
+                <span class="metric-text-stack">
+                  <span class="metric-label">Rain Today</span>
+                  <span class="metric-reading">
+                    <span class="metric-value">$rain_today_val</span>
+                    <span class="metric-unit">$rain_unit_label</span>
+                  </span>
+                </span>
+              </a>
+            </div>
+          </div>
+
+          <nav class="card-footer-nav" aria-label="Primary station quick links">
+            <span class="footer-nav-item is-active" aria-current="page">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M12 3.2L3 10.6h2.7V20h4.8v-5.5h3V20h4.8v-9.4H21L12 3.2Z"/>
+              </svg>
+              <span>Overview</span>
+            </span>
+            <a href="charts.html?metric=temperature&amp;period=today" class="footer-nav-item" aria-label="Temperature chart">
+              <svg viewBox="0 0 40 40" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 23.8V8.5a4 4 0 0 1 8 0v15.3a6.5 6.5 0 1 1-8 0Z"/>
+                <circle cx="20" cy="29" r="3" fill="currentColor"/>
+                <line x1="20" y1="13" x2="20" y2="26"/>
+              </svg>
+            </a>
+            <a href="charts.html?metric=rain&amp;period=today" class="footer-nav-item" aria-label="Rain chart">
+              <svg viewBox="0 0 40 40" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 6C11.7 6 5.5 12.1 5.5 19.5h29C34.5 12.1 28.3 6 20 6Z" fill="currentColor" fill-opacity="0.85"/>
+                <path d="M20 19.5V31a3.2 3.2 0 0 1-6.4 0"/>
+              </svg>
+            </a>
+            <a href="charts.html?metric=humidity&amp;period=today" class="footer-nav-item" aria-label="Humidity chart">
+              <svg viewBox="0 0 40 40" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 5.5C20 5.5 9.5 18 9.5 25a10.5 10.5 0 0 0 21 0C30.5 18 20 5.5 20 5.5Z"/>
+                <circle cx="17" cy="22.5" r="1.5"/>
+                <circle cx="23" cy="28.5" r="1.5"/>
+                <line x1="23.5" y1="21.5" x2="16.5" y2="29.5"/>
+              </svg>
+            </a>
+            <a href="station.html" class="footer-nav-item" title="Tower, Lightning &amp; Diagnostics">
+              <span>Station &rarr;</span>
+            </a>
+          </nav>
+        </div>
+      </section>
+
+      <!-- Card 2: Forecast (Promoted directly under Hero with Hourly | 7-Day segmented pills) -->
+      #if $show_forecast
+      <section class="sensor-card card-forecast" aria-labelledby="forecast-heading">
+        <div class="card-header">
+          <h2 id="forecast-heading" class="card-header-title">Forecast</h2>
+          <div class="card-header-control">
+            <div class="forecast-mode-toggle" role="group" aria-label="Forecast view">
+              <button type="button" class="forecast-mode-btn is-active" data-forecast-mode="hourly" aria-pressed="true">Hourly</button>
+              <button type="button" class="forecast-mode-btn" data-forecast-mode="daily" aria-pressed="false">7-Day</button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body is-flush">
+          <div id="forecast-strip" class="forecast-strip is-hourly-strip" aria-live="polite">
+            <div class="forecast-loading">Loading Open-Meteo forecast&hellip;</div>
+          </div>
+          <div class="forecast-attribution">
+            Forecasting powered by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+          </div>
+        </div>
+      </section>
+      #end if
+
+      <!-- Card 3: Windy.com Live Radar & Wind Map -->
+      #if $show_windy
+      <details class="sensor-card card-radar" data-card-id="windy-radar" open>
+        <summary class="card-header">
+          <span class="card-header-title">Live Radar (Windy)</span>
+          <span class="card-chevron" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 7.5L10 12.5L15 7.5"/></svg>
+          </span>
+        </summary>
+        <div class="card-body is-flush">
+          <div class="radar-frame-wrap">
+            <iframe
+              class="windy-iframe"
+              title="Live weather radar and wind map centered on $station.location"
+              loading="lazy"
+              src="https://embed.windy.com/embed2.html?lat=${lat_val}&amp;lon=${lon_val}&amp;detailLat=${lat_val}&amp;detailLon=${lon_val}&amp;width=650&amp;height=420&amp;zoom=${windy_zoom}&amp;level=surface&amp;overlay=${windy_overlay}&amp;product=ecmwf&amp;menu=&amp;message=true&amp;marker=true&amp;calendar=now&amp;pressure=&amp;type=map&amp;location=coordinates&amp;detail=&amp;metricWind=${windy_wind_unit}&amp;metricTemp=${windy_temp_unit}&amp;radarRange=-1"
+              allowfullscreen>
+            </iframe>
+          </div>
+        </div>
+      </details>
+      #end if
+
+      <!-- Right Stack: Air Quality & UV above Local Tides -->
+      #if $show_air_quality or $show_tides
+      <div class="dashboard-side-stack">
+        #if $show_air_quality
+        <details class="sensor-card card-air-quality" data-card-id="air-quality" open>
+          <summary class="card-header">
+            <span class="card-header-title-group">
+              <span class="card-header-title">Air Quality &amp; UV</span>
+              <span class="aqi-status-pill" id="aqi-status-pill">Loading</span>
+            </span>
+            <span class="card-chevron" aria-hidden="true">
+              <svg viewBox="0 0 20 20" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 7.5L10 12.5L15 7.5"/></svg>
+            </span>
+          </summary>
+          <div class="card-body">
+            <div class="aqi-hero-row">
+              <div class="aqi-score-block">
+                <span class="aqi-score-value" id="aqi-hero-value">--</span>
+                <span class="aqi-score-label" id="aqi-score-label">$aqi_standard_label</span>
+              </div>
+              <div class="aqi-summary-block">
+                <div class="aqi-meter-track" aria-hidden="true">
+                  <div class="aqi-meter-fill" id="aqi-meter-fill" style="width: 12%;"></div>
+                </div>
+                <p class="aqi-summary-text" id="aqi-summary-text">Fetching live particulate and UV conditions&hellip;</p>
+              </div>
+            </div>
+
+            <div class="aqi-metrics-grid">
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">PM2.5 (Smoke)</span>
+                <span class="aqi-metric-val" id="aqi-pm25">--</span>
+              </div>
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">PM10 (Dust)</span>
+                <span class="aqi-metric-val" id="aqi-pm10">--</span>
+              </div>
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">UV Index</span>
+                <span class="aqi-metric-val" id="aqi-uv">--</span>
+              </div>
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">Ozone (O₃)</span>
+                <span class="aqi-metric-val" id="aqi-o3">--</span>
+              </div>
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">NO₂</span>
+                <span class="aqi-metric-val" id="aqi-no2">--</span>
+              </div>
+              <div class="aqi-metric-tile">
+                <span class="aqi-metric-name">CO</span>
+                <span class="aqi-metric-val" id="aqi-co">--</span>
+              </div>
+            </div>
+
+            <div class="card-sub-attribution">
+              Air quality &amp; UV powered by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+            </div>
+          </div>
+        </details>
+        #end if
+
+        #if $show_tides
+        <details class="sensor-card card-tides" data-card-id="local-tides" open>
+          <summary class="card-header">
+            <span class="card-header-title-group">
+              <span class="card-header-title">$tide_title</span>
+              <span class="tide-station-pill" id="tide-station-badge">$tide_station_name</span>
+            </span>
+            <span class="card-chevron" aria-hidden="true">
+              <svg viewBox="0 0 20 20" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 7.5L10 12.5L15 7.5"/></svg>
+            </span>
+          </summary>
+          <div class="card-body">
+            <div class="tide-hero-row">
+              <div class="tide-state-block">
+                <span class="tide-state-label" id="tide-current-state">Calculating tide cycle&hellip;</span>
+                <span class="tide-next-summary" id="tide-next-summary">Next tide event loading</span>
+              </div>
+              <div class="tide-height-block">
+                <span class="tide-height-value" id="tide-current-height">-- m</span>
+                <span class="tide-height-sub">Est. chart datum</span>
+              </div>
+            </div>
+
+            <div class="tide-curve-wrap" id="tide-svg-wrap" aria-hidden="true"></div>
+
+            <div class="tide-events-grid" id="tide-events-grid" aria-live="polite"></div>
+
+            <div class="card-sub-attribution">
+              $tide_attribution
+            </div>
+          </div>
+        </details>
+        #end if
+      </div>
+      #end if
+
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>$station.location &middot; $station.hardware &middot; WeeWX $station.version</span>
+  </footer>
+
+  <div id="status-toast" class="status-toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    window.FROSTLINE_CONFIG = #echo json.dumps($runtime_config).replace('</', '<\\/')#;
+  </script>
+  <script src="assets/js/app.js?v=$asset_ver" defer></script>
+</body>
+</html>
