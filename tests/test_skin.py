@@ -106,6 +106,8 @@ class TestFrostlineSkin(unittest.TestCase):
                 self.assertIn('<meta name="color-scheme" content="light dark">', html)
                 self.assertIn('localStorage.getItem("color-scheme")', html)
                 self.assertIn('id="theme-select"', html)
+                self.assertIn('id="theme-toggle-btn"', html)
+                self.assertIn('class="nav-tab-icon"', html)
                 self.assertIn('href="records.html"', html)
                 self.assertIn('href="wear.html"', html)
                 self.assertIn('href="station.html"', html)
@@ -265,6 +267,9 @@ class TestFrostlineSkin(unittest.TestCase):
         self.assertIn("--status-red", css)
         self.assertIn(".is-stale", css)
         self.assertIn("overflow-x: clip;", css)
+        self.assertIn(".mobile-theme-btn", css)
+        self.assertIn(".station-nav-bar", css)
+        self.assertIn("inset-block-end: 0;", css)
         for token in ("#0B0D0E", "#1A1D1E", "#222526", "#2D3133", "#00A8E8", "#6CC04A", "#7AC143"):
             self.assertIn(token, css, f"Missing dark palette color {token}")
 
@@ -510,7 +515,7 @@ assert.equal(T.classifyAqiTier(175).label, "Unhealthy");
             else:
                 sys.modules.pop("weecfg.extension", None)
 
-        self.assertEqual(installer.version, "1.0.0")
+        self.assertEqual(installer.version, "1.1.0")
         self.assertEqual(installer.name, "frostline")
         frostline_cfg = installer.config["StdReport"]["Frostline"]
         self.assertEqual(frostline_cfg["skin"], "frostline")

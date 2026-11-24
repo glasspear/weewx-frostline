@@ -600,6 +600,7 @@ def main() -> int:
         "show_tides": "true",
         "show_wear_running": "true",
         "show_wear_sar": "true",
+        "stale_threshold_minutes": "0",
     }
     written = render_preview(
         args.output,

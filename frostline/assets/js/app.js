@@ -534,8 +534,16 @@
 
   function initThemeToggle() {
     const select = document.getElementById("theme-select");
+    const toggleBtn = document.getElementById("theme-toggle-btn");
     const meta = document.querySelector('meta[name="color-scheme"]');
     if (!meta) return;
+
+    function syncToggleButton() {
+      if (!toggleBtn) return;
+      const light = isLightTheme();
+      toggleBtn.setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+      toggleBtn.setAttribute("title", light ? "Switch to dark theme" : "Switch to light theme");
+    }
 
     function readUrlTheme() {
       try {
@@ -582,6 +590,7 @@
           // Ignore storage restrictions
         }
       }
+      syncToggleButton();
       rerenderActiveChart();
     }
 
@@ -590,6 +599,12 @@
     if (select) {
       select.addEventListener("change", () => {
         applyThemeValue(select.value, true);
+      });
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        applyThemeValue(isLightTheme() ? "dark" : "light", true);
       });
     }
 
@@ -604,6 +619,7 @@
       const onSystemThemeChange = () => {
         if (readStored() === "auto") {
           document.documentElement.removeAttribute("data-theme");
+          syncToggleButton();
           rerenderActiveChart();
         }
       };
@@ -617,10 +633,15 @@
 
   function updateConnectionStatus(reportEpoch) {
     const thresholdRaw = Number(CFG.staleThresholdMinutes);
+    const thresholdDisabled = Number.isFinite(thresholdRaw) && thresholdRaw === 0;
     const thresholdMinutes = Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 15;
     const epoch = Number(reportEpoch);
-    const ageMinutes = Number.isFinite(epoch) && epoch > 0 ? (Date.now() / 1000 - epoch) / 60 : Infinity;
-    const isStale = ageMinutes > thresholdMinutes;
+    const ageMinutes = thresholdDisabled
+      ? 0
+      : Number.isFinite(epoch) && epoch > 0
+        ? (Date.now() / 1000 - epoch) / 60
+        : Infinity;
+    const isStale = !thresholdDisabled && ageMinutes > thresholdMinutes;
 
     const statusBars = document.querySelectorAll(".card-header.has-status-bar, .sensor-card.has-top-status-bar");
     statusBars.forEach((bar) => {
@@ -988,7 +1009,9 @@
       dismissedSig = "";
     }
 
-    const shouldAutoOpen = signature !== dismissedSig;
+    const isMobileViewport =
+      typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches;
+    const shouldAutoOpen = !isMobileViewport && signature !== dismissedSig;
     panel.hidden = !shouldAutoOpen;
     minBar.hidden = shouldAutoOpen;
   }

@@ -2924,4 +2924,446 @@
       grid-column: 1 / -1;
     }
   }
+
+  /* ---------------- Mobile-Only Ergonomics & Typography (<= 639px) ---------------- */
+  .mobile-theme-btn,
+  .nav-tab-icon,
+  .nav-label-mobile {
+    display: none;
+  }
+
+  .theme-icon-moon {
+    display: none;
+  }
+
+  [data-theme="light"] .theme-icon-sun {
+    display: none;
+  }
+
+  [data-theme="light"] .theme-icon-moon {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .theme-icon-sun {
+      display: none;
+    }
+
+    :root:not([data-theme="dark"]) .theme-icon-moon {
+      display: block;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .top-brand-bar {
+      padding-inline: 0.75rem;
+    }
+
+    .brand-bar-inner {
+      min-block-size: 50px;
+      gap: 0.45rem;
+    }
+
+    .brand-logo {
+      font-size: 1rem;
+      gap: 0.38rem;
+    }
+
+    .station-heading {
+      font-size: 0.94rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .brand-right {
+      gap: 0.1rem;
+    }
+
+    .mobile-theme-btn {
+      display: inline-flex;
+    }
+
+    .nav-theme-control {
+      display: none;
+    }
+
+    .station-nav-bar {
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: 0;
+      z-index: 60;
+      background-color: var(--bg-topbar);
+      border-block-start: 1px solid var(--border-card);
+      padding: 0.25rem 0.25rem calc(0.3rem + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .nav-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      overflow-x: visible;
+      gap: 0;
+    }
+
+    .nav-tab {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.2rem;
+      inline-size: 100%;
+      min-block-size: 52px;
+      padding: 0.35rem 0.2rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-block-end: 0;
+      border-block-start: 2px solid transparent;
+    }
+
+    .nav-tab.is-active {
+      color: var(--accent-cyan);
+      border-block-start-color: var(--accent-cyan);
+    }
+
+    .nav-tab-icon {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .station-code-pill,
+    .nav-label-desktop {
+      display: none;
+    }
+
+    .nav-label-mobile {
+      display: inline;
+    }
+
+    .site-footer {
+      padding-block-end: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+      font-size: 0.82rem;
+    }
+
+    .status-toast {
+      inset-block-end: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .dashboard-main {
+      padding: 0.85rem 0.75rem 1.25rem;
+    }
+
+    .records-main,
+    .wear-main,
+    .station-main {
+      padding: 0.9rem 0.75rem 1.5rem;
+    }
+
+    .dashboard-grid > *,
+    .records-grid > *,
+    .wear-grid > *,
+    .station-grid > *,
+    .dashboard-side-stack > * {
+      min-inline-size: 0;
+      max-inline-size: 100%;
+    }
+
+    .sensor-card {
+      border-radius: 14px;
+      min-inline-size: 0;
+      max-inline-size: 100%;
+      contain: layout inline-size;
+    }
+
+    .sensor-card::details-content,
+    .card-body,
+    .forecast-strip {
+      min-inline-size: 0;
+      max-inline-size: 100%;
+    }
+
+    .alerts-region {
+      margin-block-end: 0.75rem;
+    }
+
+    .alerts-restore-btn {
+      inline-size: 100%;
+      min-block-size: 46px;
+      padding: 0.65rem 0.9rem;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      justify-content: flex-start;
+    }
+
+    .alerts-restore-action {
+      margin-inline-start: auto;
+      flex-shrink: 0;
+    }
+
+    .alert-item-title {
+      font-size: 0.98rem;
+    }
+
+    .alert-item-desc {
+      font-size: 0.9rem;
+    }
+
+    .alert-item-time,
+    .alert-item-link {
+      font-size: 0.82rem;
+    }
+
+    .card-primary > .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      padding: 1rem;
+    }
+
+    .primary-main-layout {
+      display: contents;
+    }
+
+    .primary-hero-row {
+      order: 1;
+      padding-block-end: 0;
+      gap: 0.75rem;
+    }
+
+    .primary-top-bar {
+      order: 2;
+      padding-block-end: 0;
+      margin-block-end: 0;
+      border-block-end: 0;
+      gap: 0.5rem;
+    }
+
+    .primary-metrics-grid {
+      order: 3;
+      padding-block: 0.1rem 0;
+      gap: 0.65rem;
+    }
+
+    .card-footer-nav,
+    .lightning-status-pill.is-clear {
+      display: none;
+    }
+
+    .hero-temp-int {
+      font-size: 4.35rem;
+      font-weight: 500;
+    }
+
+    .hero-temp-unit {
+      font-size: 1.3rem;
+      font-weight: 500;
+    }
+
+    .hero-temp-dec {
+      font-size: 1.8rem;
+      font-weight: 400;
+    }
+
+    .condition-summary {
+      font-size: 0.96rem;
+      font-weight: 500;
+    }
+
+    .feels-like-readout {
+      font-size: 0.98rem;
+    }
+
+    .highlow-readout {
+      font-size: 0.92rem;
+    }
+
+    .quip-banner.is-inline {
+      flex: 1 1 100%;
+      padding: 0.65rem 0.8rem;
+      background-color: var(--bg-tile);
+      border: 1px solid var(--border-tile);
+      border-inline-start: 3px solid var(--accent-cyan);
+      border-radius: 10px;
+      gap: 0.5rem;
+    }
+
+    .quip-copy {
+      flex: 1 1 160px;
+    }
+
+    .quip-headline {
+      font-size: 0.95rem;
+    }
+
+    .quip-subtext {
+      font-size: 0.85rem;
+    }
+
+    .quip-reroll-btn {
+      inline-size: 36px;
+      block-size: 36px;
+    }
+
+    .quip-tone-select {
+      font-size: 0.82rem;
+      min-block-size: 36px;
+    }
+
+    .primary-metrics-grid > .metric-cell {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: space-between;
+      background-color: var(--bg-tile);
+      border: 1px solid var(--border-tile);
+      border-radius: 12px;
+      padding: 0.75rem 0.85rem;
+      min-block-size: 86px;
+      gap: 0.4rem;
+    }
+
+    .primary-metrics-grid > .metric-cell:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      min-block-size: 62px;
+      gap: 0.7rem;
+    }
+
+    .metric-icon {
+      inline-size: 26px;
+      block-size: 26px;
+    }
+
+    .metric-text-stack {
+      inline-size: 100%;
+    }
+
+    .metric-label {
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+    }
+
+    .metric-reading {
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      gap: 0.22rem;
+    }
+
+    .metric-value {
+      font-size: 1.32rem;
+      font-weight: 600;
+    }
+
+    .metric-unit {
+      font-size: 0.88rem;
+    }
+
+    .card-header {
+      min-block-size: 48px;
+      padding: 0.7rem 0.95rem;
+    }
+
+    .card-header-title {
+      font-size: 1.05rem;
+    }
+
+    .forecast-mode-btn {
+      min-block-size: 38px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.88rem;
+    }
+
+    .forecast-strip:not(.is-daily-list) {
+      grid-auto-columns: minmax(82px, 1fr);
+    }
+
+    .forecast-tile {
+      padding: 0.85rem 0.45rem;
+      gap: 0.55rem;
+    }
+
+    .forecast-day {
+      font-size: 0.9rem;
+    }
+
+    .forecast-temps,
+    .forecast-temp-high {
+      font-size: 1.18rem;
+      font-weight: 600;
+    }
+
+    .forecast-meta-row {
+      font-size: 0.84rem;
+    }
+
+    .forecast-daily-row {
+      grid-template-columns: 3.1rem 30px 3.3rem 2.75rem minmax(48px, 1fr) 2.75rem;
+      gap: 0.38rem;
+      padding: 0.65rem 0.75rem;
+    }
+
+    .forecast-daily-day,
+    .forecast-daily-low,
+    .forecast-daily-high {
+      font-size: 0.95rem;
+    }
+
+    .forecast-daily-precip {
+      font-size: 0.84rem;
+    }
+
+    .aqi-score-value {
+      font-size: 1.85rem;
+    }
+
+    .aqi-summary-text {
+      font-size: 0.92rem;
+    }
+
+    .aqi-metric-name {
+      font-size: 0.82rem;
+    }
+
+    .aqi-metric-val {
+      font-size: 1.05rem;
+    }
+
+    .tide-state-label {
+      font-size: 1.05rem;
+    }
+
+    .tide-next-summary {
+      font-size: 0.88rem;
+    }
+
+    .tide-height-value {
+      font-size: 1.6rem;
+    }
+
+    .tide-event-time {
+      font-size: 1.02rem;
+    }
+
+    .tide-event-height {
+      font-size: 0.95rem;
+    }
+
+    .tide-event-badge,
+    .tide-event-day {
+      font-size: 0.82rem;
+    }
+
+    .records-period-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.35rem;
+      padding-inline: 0;
+    }
+
+    .records-period-btn {
+      padding: 0.5rem 0.25rem;
+      font-size: 0.82rem;
+      text-align: center;
+      white-space: nowrap;
+    }
+  }
 }

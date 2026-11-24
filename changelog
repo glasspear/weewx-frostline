@@ -1,3 +1,12 @@
+v1.1.0 — 2026-11-24
+--------------------
+- Mobile-only UI/UX redesign (`<= 639px`; desktop layout unchanged):
+  - Fixed bottom navigation bar with Home, Charts, Records, Wear, and weather-mast Station icons in thumb-friendly reach.
+  - Compact single-row mobile header with an instant sun/moon light/dark toggle icon.
+  - Active Weather Alerts default to a compact 1-line pill on mobile (tap to expand) so current conditions stay above the fold.
+  - Larger 3-tier mobile typography scale (`4.35rem` hero temp, `1.42rem` bold metric values, `>= 13px` labels) and spacious 2x2 modular metric cards.
+  - Hides redundant quick-jump footer row and `Lightning: Clear` pill on small screens while keeping active strike badges visible.
+
 v1.0.0 — 2026-11-23
 --------------------
 - Initial public release of the Frostline skin for WeeWX v5.

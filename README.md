@@ -66,13 +66,13 @@ A clean, responsive adaptive dark/light **WeeWX v5** weather station skin inspir
 Install directly using `weectl` (this installs into `skins/frostline/` and sets `HTML_ROOT = public_html/frostline` so it never overwrites your existing root WeeWX site):
 
 ```bash
-weectl extension install https://github.com/glasspear/weewx-frostline/releases/download/v1.0.0/weewx-frostline-v1.0.0.tar.gz
+weectl extension install https://github.com/glasspear/weewx-frostline/releases/download/v1.1.0/weewx-frostline-v1.1.0.tar.gz
 ```
 
 Or download a release tarball locally and run:
 
 ```bash
-weectl extension install weewx-frostline-v1.0.0.tar.gz
+weectl extension install weewx-frostline-v1.1.0.tar.gz
 ```
 
 Then run a report cycle to generate the site:
@@ -164,7 +164,7 @@ Override any of these under `[StdReport] -> [[Frostline]] -> [[[Extras]]]` in `w
 | `show_wear_sar` | `false` | Enable the **Search & Rescue (GSAR 12-Hour Callout)** card on `wear.html`. |
 | `rain_units` | `auto` | `auto` (`in` for US Imperial, `mm` for metric/cm), `mm`, or `inch`. |
 | `stale_threshold_minutes` | `15` | Minutes without an archive update before sensor cards flag `Offline`. |
-| `asset_version` | `20261123-9` | Cache-busting query string for CSS, JS, and icons. |
+| `asset_version` | `20261124-1` | Cache-busting query string for CSS, JS, and icons. |
 | `chartjs_cdn` | jsDelivr Chart.js 4.4.7 | CDN URL for Chart.js v4 (`chart-fallback.js` renders offline). |
 | `chartjs_sri` | SHA-384 hash | Subresource Integrity hash applied automatically when using the default Chart.js CDN URL. |
 

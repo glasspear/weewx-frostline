@@ -11,7 +11,7 @@
 #set $show_wear_running = str($Extras.get('show_wear_running', 'false')).strip().lower() == 'true'
 #set $show_wear_sar = str($Extras.get('show_wear_sar', 'false')).strip().lower() == 'true'
 #set $rain_units_pref = str($Extras.get('rain_units', 'auto') or 'auto').strip().lower()
-#set $asset_ver = str($Extras.get('asset_version', '20261123-9') or '20261123-9').strip()
+#set $asset_ver = str($Extras.get('asset_version', '20261124-1') or '20261124-1').strip()
 
 #def _safe_num($vh, $scale=1.0)
 #try
@@ -147,6 +147,15 @@
         </div>
         <div class="brand-right">
           <span class="last-updated-badge">Updated $current.dateTime</span>
+          <button type="button" class="icon-action-btn mobile-theme-btn" id="theme-toggle-btn" aria-label="Toggle light or dark theme" title="Toggle light/dark theme">
+            <svg class="theme-icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+            <svg class="theme-icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>
+            </svg>
+          </button>
           <a href="index.html" class="icon-action-btn" aria-label="Back to overview dashboard">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1v-9.5Z"/>
@@ -161,27 +170,34 @@
         <ul class="nav-tabs">
           <li>
             <a href="index.html" class="nav-tab">
+              <svg class="nav-tab-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5.5v-6h-5v6H4a1 1 0 0 1-1-1Z"/></svg>
               <span class="station-code-pill">$station_code</span>
-              <span>Dashboard</span>
+              <span class="nav-label-desktop">Dashboard</span>
+              <span class="nav-label-mobile">Home</span>
             </a>
           </li>
           <li>
             <a href="charts.html" class="nav-tab">
+              <svg class="nav-tab-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 4 3 5-6"/></svg>
               <span>Charts</span>
             </a>
           </li>
           <li>
             <a href="records.html" class="nav-tab">
+              <svg class="nav-tab-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
               <span>Records</span>
             </a>
           </li>
           <li>
             <a href="wear.html" class="nav-tab is-active" aria-current="page">
-              <span>What to Wear</span>
+              <svg class="nav-tab-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3l3 4-3 2v10H6V10L3 8l3-4h3"/><path d="M9 4a3 3 0 0 0 6 0"/></svg>
+              <span class="nav-label-desktop">What to Wear</span>
+              <span class="nav-label-mobile">Wear</span>
             </a>
           </li>
           <li>
             <a href="station.html" class="nav-tab">
+              <svg class="nav-tab-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="5" y1="9" x2="19" y2="9"/><circle cx="5" cy="7" r="2"/><circle cx="19" cy="7" r="2"/><rect x="9" y="13" width="6" height="4" rx="1"/><path d="m12 5 4-2-1 2z" fill="currentColor"/></svg>
               <span>Station</span>
             </a>
           </li>

@@ -9,7 +9,7 @@ A responsive, adaptive dark/light WeeWX v5 weather dashboard featuring interacti
 ### Recommended: `weectl extension install`
 
 ```bash
-weectl extension install https://github.com/glasspear/weewx-frostline/releases/download/v1.0.0/weewx-frostline-v1.0.0.tar.gz
+weectl extension install https://github.com/glasspear/weewx-frostline/releases/download/v1.1.0/weewx-frostline-v1.1.0.tar.gz
 ```
 
 ### Fallback: Manual Copy
@@ -82,6 +82,6 @@ Run `weectl report run Frostline` to generate `index.html`, `charts.html`, `reco
 | `tide_station_code` | *(empty)* | Optional CHS tide station code used for DFO attribution and cache naming. |
 | `tide_station_id` | *(empty)* | DFO IWLS station ObjectId (Canada) or 7-digit NOAA CO-OPS station ID (US, e.g. `8410140`). |
 | `stale_threshold_minutes` | `15` | Minutes since last archive update before the sensor status bar turns red (`Offline`). |
-| `asset_version` | `20261123-9` | Cache-busting query string for CSS, JS, and icons. |
+| `asset_version` | `20261124-1` | Cache-busting query string for CSS, JS, and icons. |
 | `chartjs_cdn` | jsDelivr Chart.js 4.4.7 | Override or host Chart.js locally (`assets/js/chart-fallback.js` renders automatically if unreachable). |
 | `chartjs_sri` | SHA-384 hash | Optional SRI hash for custom `chartjs_cdn` overrides (auto-populated for default jsDelivr Chart.js 4.4.7). |
