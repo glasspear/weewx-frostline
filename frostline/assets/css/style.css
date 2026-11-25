@@ -1417,6 +1417,30 @@
     grid-column: 1 / -1;
   }
 
+  .forecast-error .forecast-retry-btn {
+    margin-top: 0.75rem;
+    padding: 0.45rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-btn);
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+  }
+
+  .forecast-error .forecast-retry-btn:hover,
+  .forecast-error .forecast-retry-btn:focus-visible {
+    color: var(--fg-accent);
+    background: var(--bg-hover);
+    border-color: var(--accent);
+  }
+
+  .forecast-error .forecast-retry-btn:active {
+    transform: scale(0.97);
+  }
+
   .forecast-attribution {
     padding: 0.45rem 0.85rem;
     text-align: end;
@@ -1843,6 +1867,44 @@
 
   .alerts-past-summary:hover {
     color: var(--text-primary);
+  }
+
+  /* Weather alerts fetch error state */
+  .alerts-region .alerts-error-state {
+    padding: 1.25rem 1rem;
+    text-align: center;
+    grid-column: 1 / -1;
+  }
+
+  .alerts-region .alerts-error-message {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.75rem;
+    line-height: 1.45;
+  }
+
+  .alerts-region .alerts-retry-btn {
+    margin-top: 0.4rem;
+    padding: 0.45rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-btn);
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+  }
+
+  .alerts-region .alerts-retry-btn:hover,
+  .alerts-region .alerts-retry-btn:focus-visible {
+    color: var(--fg-accent);
+    background: var(--bg-hover);
+    border-color: var(--accent);
+  }
+
+  .alerts-region .alerts-retry-btn:active {
+    transform: scale(0.97);
   }
 
   /* ---------------- Weather Commentary (Quip) Banner ---------------- */

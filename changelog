@@ -1,3 +1,8 @@
+v1.1.1 — 2026-11-25
+--------------------
+- Improved forecast error handling: catches errors with proper `err` binding and displays descriptive error messages instead of generic placeholders.
+- Added styling for the forecast retry button on error state.
+
 v1.1.0 — 2026-11-24
 --------------------
 - Mobile-only UI/UX redesign (`<= 639px`; desktop layout unchanged):

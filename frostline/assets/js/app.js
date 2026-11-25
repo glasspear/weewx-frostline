@@ -499,12 +499,26 @@
       renderForecastStrip(readForecastMode());
 
       if (showFeedback) showToast("Forecast and weather conditions refreshed.");
-    } catch {
+    } catch (err) {
       const strip = document.getElementById("forecast-strip");
       if (strip && !forecastCache) {
-        strip.replaceChildren(
-          makeEl("div", "forecast-error", "Unable to reach Open-Meteo API right now.")
-        );
+        // Build a retry button
+        const retryBtn = document.createElement("button");
+        retryBtn.className = "forecast-retry-btn";
+        retryBtn.type = "button";
+        retryBtn.textContent = "Retry";
+        retryBtn.addEventListener("click", () => {
+          strip.textContent = "";
+          fetchOpenMeteo(true);
+        });
+
+        const msg = document.createElement("div");
+        msg.className = "forecast-error-message";
+        msg.textContent = "Unable to reach Open-Meteo API right now.";
+
+        strip.textContent = "";
+        strip.appendChild(msg);
+        strip.appendChild(retryBtn);
       }
       if (showFeedback) showToast("Could not refresh Open-Meteo data.");
     }
@@ -938,6 +952,36 @@
     });
   }
 
+  function renderAlertsErrorState(region) {
+    // Only show if region exists and no error state already present
+    if (!region) return;
+
+    // Avoid duplicating the error state on repeated calls
+    if (region.querySelector(".alerts-error-state")) return;
+
+    const retryBtn = document.createElement("button");
+    retryBtn.className = "alerts-retry-btn";
+    retryBtn.type = "button";
+    retryBtn.textContent = "Retry";
+    retryBtn.addEventListener("click", () => {
+      const errorEl = region.querySelector(".alerts-error-state");
+      if (errorEl) errorEl.remove();
+      fetchWeatherAlerts();
+    });
+
+    const msg = document.createElement("div");
+    msg.className = "alerts-error-state";
+    const errorSpan = document.createElement("span");
+    errorSpan.className = "error-text";
+    errorSpan.textContent = "Weather alerts unavailable right now.";
+    msg.appendChild(errorSpan);
+    msg.appendChild(retryBtn);
+
+    // Insert before any existing panel content
+    region.insertBefore(msg, region.firstChild);
+    region.hidden = false;
+  }
+
   function renderAlertsUi(activeAlerts, pastAlerts) {
     currentActiveSignature = "";
     const region = document.getElementById("alerts-region");
@@ -1032,15 +1076,17 @@
         : `https://api.weather.gov/alerts?point=${lat.toFixed(4)},${lon.toFixed(4)}&limit=20`;
 
     let fetched = [];
+    let apiOk = false;
     try {
       const res = await fetch(url, { cache: "no-store" });
       if (res.ok) {
+        apiOk = true;
         const json = await res.json();
         const rawAlerts =
           provider === "canada" ? normalizeCanadaAlerts(json) : normalizeUsAlerts(json);
         fetched = dedupeAlerts(rawAlerts);
       }
-    } catch {
+    } catch (err) {
       // Fall back silently to locally stored 3-day history if offline
     }
 
@@ -1048,9 +1094,16 @@
     const cutoff = nowMs - ALERTS_RETENTION_MS;
     const historyMap = new Map();
 
-    loadAlertHistory().forEach((item) => {
+    const storedHistory = loadAlertHistory();
+    storedHistory.forEach((item) => {
       historyMap.set(item.id, item);
     });
+
+    // If API failed and no history, show error state
+    if (!apiOk && storedHistory.length === 0) {
+      renderAlertsErrorState(region);
+      return;
+    }
 
     const activeIds = new Set();
     const activeRaw = [];

@@ -10,7 +10,7 @@ def loader():
 class FrostlineInstaller(ExtensionInstaller):
     def __init__(self):
         super().__init__(
-            version="1.1.0",
+            version="1.1.1",
             name="frostline",
             description=(
                 "Responsive dark/light dashboard, Chart.js graphs, Weather Alerts, "
